@@ -1,0 +1,105 @@
+import numpy as np
+import numpy.testing as npt
+import math
+
+def kl(p, q):
+    assert(p.size == q.size)
+    d = 0.0
+    for i, x in enumerate(p):
+        # print "pi, qi =", p[i], q[i]
+        if q[i] > 0.0:  # zero div
+            d += p[i] * math.log(p[i] / q[i], 2)
+    return d
+
+def bottleneck(px, py_x, c_card, beta, thrs=0.0001):
+    # px     P(X)   : S -> R, stationary distribution
+    # py_x   P(Y|X) : S, A -> R
+    # c_card |X-childa|
+    
+    x_card = py_x.shape[0]
+    y_card = py_x.shape[1]
+
+    print "|X|, |Y|, |C| =", x_card, y_card, c_card
+
+    npt.assert_almost_equal(sum(px), 1.0)
+    for x in range(x_card):
+        npt.assert_almost_equal(sum(py_x[x]), 1.0)
+            
+
+    # Initial distribution doesn't matter
+    pc_x = np.full((x_card, c_card), 1.0 / c_card)  # P(Xchilda|X)
+    pc = np.full(c_card, 1.0 / c_card) # P(Xchilda)
+    py_c = np.full((c_card, y_card), 1.0 / y_card) # P(Y|Xchilda)
+
+    pc_x_bf = np.zeros((x_card, c_card))
+
+    while (np.amax(pc_x - pc_x_bf) > thrs):
+    # for t in range(50):
+        # print np.amax(pc_x - pc_x_bf)
+        pc_x_bf = np.copy(pc_x)
+
+        # 1. Calculate p(c | x)
+        for x in range(x_card):
+            for c in range(c_card):
+                d = kl(py_x[x], py_c[c])
+                print "KL =", d
+                pc_x[x][c] = pc[c] * math.exp(-beta * d)
+                # print "pc_x[", x, "][", c, "] =", pc_x[x][c]
+
+            z_xb = sum(pc_x[x]) # Normalization constant
+            # assert(z_xb > 0.0)
+            for c in range(c_card):
+                pc_x[x][c] = pc_x[x][c] / z_xb
+
+            npt.assert_almost_equal(sum(pc_x[x]), 1.0)
+
+        # 2. Calculate p(c)
+        pc = np.zeros(c_card)
+        for c in range(c_card):
+            for x in range(x_card):
+                pc[c] += pc_x[x][c] * px[x]
+                
+        npt.assert_almost_equal(sum(pc), 1.0)
+
+        # 3. Calculate p(y | c)
+        py_c = np.zeros((c_card, y_card))
+        for c in range(c_card):
+            for x in range(x_card):
+                x_c = pc_x[x][c] * px[x] / pc[c]
+                for y in range(y_card):
+                    py_c[c][y] += py_x[x][y] * x_c
+
+            npt.assert_almost_equal(sum(py_c[c]), 1.0)
+        # print "pc_x", pc_x
+        # print "pc", pc
+        # print "py_c", py_c
+
+    return (pc_x, pc, py_c)
+
+def fourstates():
+    # State space grap
+    # 0 - 1 - 2 - 3
+    # Action set = right, left
+
+    # state distribution
+    # ssd = np.full(4, 1.0 / 4.0)
+    ssd = np.array([0.5, 0.25, 0.15, 0.10])
+
+    # Demonstrated policy
+    # Policy needs to be stochastic to calculate
+    policy = np.array([[0.01, 0.99],
+                     [0.01, 0.99],
+                     [0.99, 0.01],
+                     [0.99, 0.01]])
+    c_card = 4  # Abstract state space size
+    beta = 10.0
+    # beta = 0.0001
+    pc_x, pc, py_c = bottleneck(ssd, policy, c_card, beta)
+
+    print "pc_x", pc_x
+    print "pc", pc
+    print "py_c", py_c
+
+
+if __name__ == '__main__':
+    fourstates()

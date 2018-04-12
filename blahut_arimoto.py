@@ -2,6 +2,8 @@
 import math
 from collections import defaultdict
 
+from func_plotting import PlotFunc, plot_funcs
+
 # ---------------------
 # -- Print Functions --
 # ---------------------
@@ -60,10 +62,10 @@ def init_p_of_x(all_x):
 
 	new_p_x = defaultdict(float)
 	
-	new_p_x["11"] = 0.8
+	new_p_x["11"] = 0.6
 	new_p_x["10"] = 0.05
 	new_p_x["01"] = 0.05
-	new_p_x["00"] = 0.1
+	new_p_x["00"] = 0.3
 
 	# for x in all_x:
 	# 	new_p_x[x] = float(x.count("1")) / len(all_x)
@@ -150,10 +152,19 @@ def compute_coding_distribution(p_of_x, p_of_x_tilde, coding_distribution, beta=
 	return new_coding_distribution
 
 
-def main():
+def blahut_arimoto(x, param_dict):
+	'''
+	Args:
+		x (float)
+		param_dict (dict)
 
-	# Beta.
-	beta = 10
+
+	Returns:
+		(float): A single value for p(code), for the first codeword.
+	'''
+	beta = x
+	iters = param_dict["iters"]
+	code_word = param_dict["code"]
 
 	# Make message alphabet.
 	all_x = ["00","01","10","11"]
@@ -167,15 +178,28 @@ def main():
 	coding_distribution = init_coding_distribution(all_x, all_x_tilde)
 
 	# Blahut.
-	for i in range(1000):
-		print "Round", i
+	for i in range(iters):
+		# print "Round", i
 		p_of_x_tilde = compute_prob_of_codes(p_of_x, coding_distribution, beta=beta)
 		coding_distribution = compute_coding_distribution(p_of_x, p_of_x_tilde, coding_distribution, beta=beta)
 
-	print "\n~~~ DONE ~~~"
-	print_pmf(p_of_x_tilde)
-	print
-	print_coding_distr(coding_distribution)
+
+	return p_of_x_tilde[code_word]
+
+
+def main():
+
+
+	# print "\n~~~ DONE ~~~"
+	# print_pmf(p_of_x_tilde)
+	# print
+	# print_coding_distr(coding_distribution)
+
+	# plot
+	pf_zero = PlotFunc(blahut_arimoto, param_dict={"iters":100, "code":"0"}, x_min=0.0, x_max=5.0, x_interval=0.2, series_name="Pr(code = 0)")
+	pf_one = PlotFunc(blahut_arimoto, param_dict={"iters":100, "code":"1"}, x_min=0.0, x_max=5.0, x_interval=0.2, series_name="Pr(code = 1)")
+
+	plot_funcs([pf_zero, pf_one], title="$\\beta\\  vs. Pr(code)$", x_label="$\\beta$")
 
 if __name__ == "__main__":
 	main()

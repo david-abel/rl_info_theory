@@ -3,30 +3,51 @@ import math
 from collections import defaultdict
 
 # ---------------------
+# -- Print Functions --
+# ---------------------
+
+def print_pmf(pmf):
+	for x in pmf.keys():
+		print "x p(x):", x, pmf[x]
+
+def print_coding_distr(coding_distribution):
+	print "\n-- Coding Distr --"
+	for x in coding_distribution.keys():
+		print "x:", x
+		for x_tilde in coding_distribution[x]:
+			print "  code:", x_tilde
+			print "  p(code | x):", coding_distribution[x][x_tilde]
+			print
+	print "--------------\n"
+
+# ---------------------
 # -- Misc. Functions --
 # ---------------------
 
-def distance(x, x_tilde):
+def distance(x_1, x_2):
 	total_dist = 0.5
-	for i, char in enumerate(x[1:]):
-		if x_tilde[i-1] != char:
-			total_dist += 1
+	if len(x_1) > len(x_2):
+		for i, char in enumerate(x_1[1:]):
+			if x_2[i-1] != char:
+				total_dist += 1
+	else:
+		for i, char in enumerate(x_2[1:]):
+			if x_1[i-1] != char:
+				total_dist += 1
 
 	return total_dist
 
-
-def _compute_denominator(x_tilde, p_of_x_tilde, all_x, beta):
+def _compute_denominator(x, p_of_x_tilde, beta):
 	'''
 	Args:
-		x_tilde (str)
+		x (str)
 		p_of_x_tilde (dict)
-		all_x (list)
 		beta (float)
 
 	Returns:
 		(float)
 	'''
-	return sum([p_of_x_tilde[x_tilde] * math.exp(- beta * distance(x_tilde, x)) for x in all_x])
+	return sum([p_of_x_tilde[x_hat] * math.exp(- beta * distance(x, x_hat)) for x_hat in p_of_x_tilde.keys()])
 
 def init_p_of_x(all_x):
 	'''
@@ -39,10 +60,10 @@ def init_p_of_x(all_x):
 
 	new_p_x = defaultdict(float)
 	
-	new_p_x["11"] = 0.5
-	new_p_x["10"] = 0.1
-	new_p_x["01"] = 0.1
-	new_p_x["00"] = 0.3
+	new_p_x["11"] = 0.8
+	new_p_x["10"] = 0.05
+	new_p_x["01"] = 0.05
+	new_p_x["00"] = 0.1
 
 	# for x in all_x:
 	# 	new_p_x[x] = float(x.count("1")) / len(all_x)
@@ -96,12 +117,7 @@ def compute_prob_of_codes(p_of_x, coding_distribution, beta=.01):
 	'''
 	new_p_of_x_tilde = defaultdict(float)
 	for x_tilde in coding_distribution.values()[0].keys():
-		print "  code:", x_tilde
 		new_p_of_x_tilde[x_tilde] = sum([p_of_x[x] * coding_distribution[x][x_tilde] for x in p_of_x.keys()])
-		print "\tp(code):", new_p_of_x_tilde[x_tilde]
-		for x in p_of_x.keys():
-			print "\t  x", x
-			print "\t    p(code | x):", coding_distribution[x][x_tilde]
 
 	return new_p_of_x_tilde
 
@@ -123,17 +139,13 @@ def compute_coding_distribution(p_of_x, p_of_x_tilde, coding_distribution, beta=
 			# Value: probability
 	new_coding_distribution = defaultdict(lambda : defaultdict(float))
 
-	all_x = p_of_x.keys()
-
-	for x in coding_distribution.keys():
-		for x_tilde in coding_distribution.values()[0].keys():
+	for x in p_of_x.keys():
+		for x_tilde in p_of_x_tilde.keys():
 
 			numerator = p_of_x_tilde[x_tilde] * math.exp(-beta * distance(x, x_tilde))
-			denominator = _compute_denominator(x_tilde, p_of_x_tilde, all_x, beta)
+			denominator = _compute_denominator(x, p_of_x_tilde, beta)
 
 			new_coding_distribution[x][x_tilde] = float(numerator) / denominator
-
-	# print new_coding_distribution
 
 	return new_coding_distribution
 
@@ -141,7 +153,7 @@ def compute_coding_distribution(p_of_x, p_of_x_tilde, coding_distribution, beta=
 def main():
 
 	# Beta.
-	beta = 0.01
+	beta = 10
 
 	# Make message alphabet.
 	all_x = ["00","01","10","11"]
@@ -155,14 +167,15 @@ def main():
 	coding_distribution = init_coding_distribution(all_x, all_x_tilde)
 
 	# Blahut.
-	for i in range(3):
+	for i in range(1000):
 		print "Round", i
 		p_of_x_tilde = compute_prob_of_codes(p_of_x, coding_distribution, beta=beta)
 		coding_distribution = compute_coding_distribution(p_of_x, p_of_x_tilde, coding_distribution, beta=beta)
 
 	print "\n~~~ DONE ~~~"
-	print "p(code):", p_of_x_tilde
-	print "p(code | x):", coding_distribution
+	print_pmf(p_of_x_tilde)
+	print
+	print_coding_distr(coding_distribution)
 
 if __name__ == "__main__":
 	main()

@@ -10,6 +10,7 @@ An implementation of the Blahut-Arimoto algorithm from:
 
 # Python imports.
 import math
+import itertools
 from collections import defaultdict
 
 
@@ -36,15 +37,24 @@ def print_coding_distr(coding_distribution):
 # ---------------------
 
 def distance(x_1, x_2):
+	'''
+	Args:
+		x_1 (str)
+		x_2 (str)
+
+	Returns:
+		(float)
+	'''
 	total_dist = 0.5
 	if len(x_1) > len(x_2):
 		for i, char in enumerate(x_1[1:]):
-			if x_2[i-1] != char:
+			if x_2[i] != char:
 				total_dist += 1
 	else:
 		for i, char in enumerate(x_2[1:]):
-			if x_1[i-1] != char:
+			if x_1[i] != char:
 				total_dist += 1
+
 	return total_dist
 
 def _compute_denominator(x, p_of_x_tilde, beta):
@@ -70,10 +80,10 @@ def init_p_of_x(all_x):
 
 	new_p_x = defaultdict(float)
 	
-	new_p_x["11"] = 0.5
-	new_p_x["10"] = 0.3
-	new_p_x["01"] = 0.1
-	new_p_x["00"] = 0.1
+	new_p_x["11"] = 0.25
+	new_p_x["10"] = 0.25
+	new_p_x["01"] = 0.25
+	new_p_x["00"] = 0.25
 
 	# for x in all_x:
 	# 	new_p_x[x] = float(x.count("1")) / len(all_x)
@@ -181,11 +191,11 @@ def blahut_arimoto(x, param_dict):
 	if "message" in param_dict.keys():
 		message = param_dict["message"]
 
-	# Make message alphabet.
-	all_x = ["00","01","10","11"]
+	# Make message alphabet: length 2 bit sequences.
+	all_x = ["".join(seq) for seq in itertools.product("01", repeat=2)]
 
-	# Make coding alphabet.
-	all_x_tilde = ["0","1"]
+	# Make coding alphabet: length 3 bit sequences.
+	all_x_tilde = ["".join(seq) for seq in itertools.product("01", repeat=3)]
 
 	# Init pmfs.
 	p_of_x = init_p_of_x(all_x)
@@ -208,40 +218,36 @@ def blahut_arimoto(x, param_dict):
 		# Return p(code | message) for plotting.
 		return coding_distribution[message][code_word]
 
+def make_ba_plot_func(code, message, iters=50):
+	from func_plotting import PlotFunc
+
+	param_dict = {"iters":iters, "code":str(code), "message":str(message)}
+	plot_func_obj = PlotFunc(blahut_arimoto, param_dict=param_dict, x_min=0.0, x_max=5.0, x_interval=0.05, series_name="$Pr(code = " + str(code) + " \\mid " + str(message) + ")$")
+
+	return plot_func_obj
+
 def make_ba_plots():
-	from func_plotting import PlotFunc, plot_funcs
 
-	param_dict_zero_oo = {"iters":50, "code":"0", "message":"11"}
-	param_dict_one_oo = {"iters":50, "code":"1", "message":"11"}
-	param_dict_zero_zo = {"iters":50, "code":"0", "message":"10"}
-	param_dict_one_zo = {"iters":50, "code":"1", "message":"10"}
-	param_dict_zero_oz = {"iters":50, "code":"0", "message":"01"}
-	param_dict_one_oz = {"iters":50, "code":"1", "message":"01"}
-	param_dict_zero_zz = {"iters":50, "code":"0", "message":"00"}
-	param_dict_one_zz = {"iters":50, "code":"1", "message":"00"}
+	# Choose code-message combos to plot.
+	funcs_to_plot = []
+	iters = 10
+	for message in ["".join(seq) for seq in itertools.product("01", repeat=2)][:2]:
+		for code in ["".join(seq) for seq in itertools.product("01", repeat=3)][:4]:
+			next_func = make_ba_plot_func(code, message, iters)
+			funcs_to_plot.append(next_func)
 
-	title = "$\\beta\\  vs. Pr$"
-
-	# plot p(code)
-	pf_zero_oo = PlotFunc(blahut_arimoto, param_dict=param_dict_zero_oo, x_min=0.0, x_max=5.0, x_interval=0.1, series_name="$Pr(code = 0 \\mid 11)$")
-	pf_one_oo = PlotFunc(blahut_arimoto, param_dict=param_dict_one_oo, x_min=0.0, x_max=5.0, x_interval=0.1, series_name="$Pr(code = 1 \\mid 11)$")
-	pf_zero_zo = PlotFunc(blahut_arimoto, param_dict=param_dict_zero_zo, x_min=0.0, x_max=5.0, x_interval=0.1, series_name="$Pr(code = 0 \\mid 10)$")
-	pf_one_zo = PlotFunc(blahut_arimoto, param_dict=param_dict_one_zo, x_min=0.0, x_max=5.0, x_interval=0.1, series_name="$Pr(code = 1 \\mid 10)$")
-	# pf_zero_oz = PlotFunc(blahut_arimoto, param_dict=param_dict_zero_oz, x_min=0.0, x_max=5.0, x_interval=0.1, series_name="$Pr(code = 0 \\mid 01)$")
-	# pf_one_oz = PlotFunc(blahut_arimoto, param_dict=param_dict_one_oz, x_min=0.0, x_max=5.0, x_interval=0.1, series_name="$Pr(code = 1 \\mid 01)$")
-	# pf_zero_zz = PlotFunc(blahut_arimoto, param_dict=param_dict_zero_zz, x_min=0.0, x_max=5.0, x_interval=0.1, series_name="$Pr(code = 0 \\mid 00)$")
-	# pf_one_zz = PlotFunc(blahut_arimoto, param_dict=param_dict_one_zz, x_min=0.0, x_max=5.0, x_interval=0.1, series_name="$Pr(code = 1 \\mid 00)$")
-
-	plot_funcs([pf_zero_oo, pf_one_oo, pf_zero_zo, pf_one_zo], title=title, x_label="$\\beta$")
+	# Plot
+	from func_plotting import plot_funcs
+	plot_funcs(funcs_to_plot, title="$\\beta\\  vs. Pr$", x_label="$\\beta$")
 
 def main():
 
 	# Make plots
-	plotting = False
+	plotting = True
 	if plotting:
 		make_ba_plots()
 	else:
-		beta = 0.5
+		beta = 0.0
 		p_of_x_tilde, coding_distribution = blahut_arimoto(x=beta, param_dict={"iters":50})
 		print_pmf(p_of_x_tilde)
 		print_coding_distr(coding_distribution)

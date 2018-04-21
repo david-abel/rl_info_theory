@@ -31,17 +31,25 @@ def kl(p, q):
             d += p[i] * math.log(p[i] / q[i])
     return d
 
+def sum_of_kl(p, q):
+    d = 0.0
+    for i, x in enumerate(p):
+        for j, y in enumerate(x):
+            if q[i][j] > 0.0:
+                d += p[i][j] * math.log(p[i][j] / q[i][j])
+    return d
+
 def bottleneck(px, py_x, c_card, beta, thrs=0.0001):
     # px     P(X)   : S -> R, stationary distribution
     # py_x   P(Y|X) : S, A -> R
     # c_card |X-childa|
 
-    print "py_x =", py_x
+    # print "py_x =", py_x
     
     x_card = py_x.shape[0]
     y_card = py_x.shape[1]
 
-    print "|X|, |Y|, |C| =", x_card, y_card, c_card
+    # print "|X|, |Y|, |C| =", x_card, y_card, c_card
 
     npt.assert_almost_equal(sum(px), 1.0)
     for x in range(x_card):
@@ -64,7 +72,7 @@ def bottleneck(px, py_x, c_card, beta, thrs=0.0001):
         for x in range(x_card):
             for c in range(c_card):
                 d = kl(py_x[x], py_c[c])
-                print "KL =", d
+                # print "KL =", d
                 pc_x[x][c] = pc[c] * math.exp(-beta * d)
                 # print "pc_x[", x, "][", c, "] =", pc_x[x][c]
 
@@ -72,7 +80,7 @@ def bottleneck(px, py_x, c_card, beta, thrs=0.0001):
             # assert(z_xb > 0.0)
             for c in range(c_card):
                 pc_x[x][c] = pc_x[x][c] / z_xb
-                print "pc_x[", x, "][", c, "] =", pc_x[x][c]
+                # print "pc_x[", x, "][", c, "] =", pc_x[x][c]
 
             npt.assert_almost_equal(sum(pc_x[x]), 1.0)
 
@@ -93,9 +101,9 @@ def bottleneck(px, py_x, c_card, beta, thrs=0.0001):
                     py_c[c][y] += py_x[x][y] * x_c
 
             npt.assert_almost_equal(sum(py_c[c]), 1.0)
-        print "pc_x", pc_x
-        print "pc", pc
-        print "py_c", py_c
+        # print "pc_x", pc_x
+        # print "pc", pc
+        # print "py_c", py_c
 
     return (pc_x, pc, py_c)
 
@@ -114,20 +122,20 @@ def fourstates():
                      [0.2, 0.8],
                      [0.8, 0.2],
                      [0.9, 0.1]])
-    c_card = 2  # Abstract state space size
-    beta = 10.0
-    # beta = 0.0001
+    c_cards = [2, 3, 4, 5]  # Abstract state space size
     
-    pc_x, pc, py_c = bottleneck(ssd, policy, c_card, beta)
-
-    np.set_printoptions(precision=2)
-    print "##################"
-    print "RESULTS"
-    print "##################"
-    print "pc_x", pc_x
-    print "pc", pc
-    print "py_c", py_c
+    betas = [0.0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0]
+    for c_card in c_cards:
+        for beta in betas:
+            pc_x, pc, py_c = bottleneck(ssd, policy, c_card, beta)
+            print "##################"
+            print "(b, |C|) = (", beta, ",", c_card, ")"
+            print "##################"
+            print "P(C|X)", pc_x
+            print "P(C)", pc
+            print "P(Y|C)", py_c
 
 
 if __name__ == '__main__':
+    np.set_printoptions(precision=2)
     fourstates()

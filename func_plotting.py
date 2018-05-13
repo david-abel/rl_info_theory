@@ -58,7 +58,7 @@ class PlotFunc(object):
 
         pyplot.plot(x_range, y_range, marker=PlotFunc._markers[series_id], color=PlotFunc._colors[series_id], label=self.series_name)
 
-def plot_funcs(funcs, file_name="func_plot", title="X versus Y", x_label="X", log_scale=False):
+def plot_funcs(funcs, file_name="func_plot", title="X versus Y", x_label="X", y_label="Y", log_scale=False):
     '''
     Args:
         funcs (list of PlotFuncs)
@@ -72,6 +72,7 @@ def plot_funcs(funcs, file_name="func_plot", title="X versus Y", x_label="X", lo
     pyplot.rc('text', usetex=True)
     pyplot.legend()
     pyplot.xlabel(x_label)
+    pyplot.ylabel(y_label)
     title_suffix = " (Log Scale)" if log_scale else ""
     pyplot.title(title + title_suffix)
     pyplot.grid(True)

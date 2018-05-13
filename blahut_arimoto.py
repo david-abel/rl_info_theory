@@ -349,7 +349,7 @@ def make_ba_plot():
 	message_code_len_pairs = [(i, message_len) for i in range(1, message_len + 1, 1)]
 
 	print message_code_len_pairs
-	for message_len, code_len in message_code_len_pairs:
+	for code_len, message_len in message_code_len_pairs:
 		print "|m|, |c|", message_len, code_len
 
 		for message in ["".join(seq) for seq in itertools.product("01", repeat=message_len)][:1]:
@@ -368,7 +368,7 @@ def make_ba_plot():
 
 	# Plot.
 	from func_plotting import plot_funcs
-	plot_funcs(funcs_to_plot, title="Blahut-Arimoto: $\\beta\\  vs. \\Pr(code \\mid message)$", x_label="$\\beta$")
+	plot_funcs(funcs_to_plot, title="Blahut-Arimoto: $\\beta$  vs. Rate", x_label="$\\beta$", y_label="Rate")
 
 # ----------
 # -- Main --

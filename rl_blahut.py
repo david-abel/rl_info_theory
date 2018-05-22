@@ -12,10 +12,7 @@ from simple_rl.tasks import ChainMDP
 from simple_rl.tasks import FourRoomMDP
 from simple_rl.planning import ValueIteration
 from simple_rl.run_experiments import run_agents_on_mdp
-
-# TODO:
-# 1) Figure out rho 
-# 2) 
+from blahut_arimoto import print_coding_distr
 
 # -------------------
 # -- Entropy Funcs --
@@ -72,6 +69,8 @@ def compute_prob_of_s_phi(pmf_s, coding_distr, beta):
     return new_pmf_s_phi
 
 def _compute_denominator(s, pmf_s_phi, pi, abstr_pi, beta):
+    '''
+    '''
     return sum([pmf_s_phi[s_phi] * math.exp(-beta * kl(pi[s], abstr_pi[s_phi])) for s_phi in pmf_s_phi.keys()])
 
 def compute_coding_distr(pmf_s, pmf_s_phi, demonstrator_policy, ground_states, abstr_pi, beta):
@@ -216,8 +215,7 @@ def init_uniform_pi(pmf, actions):
 
 def main():
     # Setup MDP, Agents.
-    mdp = FourRoomMDP(width=9, height=9, init_loc=(1, 1), goal_locs=[(9, 9)], gamma=0.95)
-    # mdp = ChainMDP(gamma=0.95)
+    mdp = FourRoomMDP(width=5, height=5, init_loc=(1, 1), goal_locs=[(5, 5)], gamma=0.95)
 
     # Make demonstrator policy.
     four_room_vi = ValueIteration(mdp)
@@ -227,13 +225,12 @@ def main():
     num_ground_states = four_room_vi.get_num_states()
     demonstrator_policy = four_room_vi.policy
 
-    # Hyperparameter.
+    # Hyperparameters.
     beta = 100.0
     iters = 40
 
     # Init distributions. (stationary distributions)
     pmf_s = get_stationary_rho_from_policy(demonstrator_policy, mdp)
-
     coding_distr = init_identity_phi(ground_states)
     pmf_s_phi = compute_prob_of_s_phi(pmf_s, coding_distr, beta=beta)
     abstr_pi = init_uniform_pi(pmf_s_phi, actions)
@@ -241,21 +238,20 @@ def main():
     # Blahut.
     for i in range(iters):
         print 'Iteration {0} of {1}'.format(i+1, iters)
+
+        # (A) Compute \rho(s).
         pmf_s_phi = compute_prob_of_s_phi(pmf_s, coding_distr, beta=beta)
 
+        # (B) Compute \phi.
         coding_distr = compute_coding_distr(pmf_s, pmf_s_phi, demonstrator_policy, ground_states, abstr_pi, beta=beta)
 
+        # (C) Compute \pi_\phi.
         inv_coding_distr = compute_inv_coding_distr(pmf_s, pmf_s_phi, coding_distr)
         abstr_pi = compute_abstr_policy(demonstrator_policy, ground_states, actions, inv_coding_distr)
 
-    # Return the two distributions from BA.
-
-    for k, v in coding_distr.iteritems():
-        print k , v
-
-
-    for k, v in abstr_pi.iteritems():
-        print k, v
+    print_coding_distr(coding_distr)
+    # for k, v in coding_distr.iteritems():
+    #     print k , 
 
     return pmf_s_phi, coding_distr, abstr_pi
 

@@ -13,76 +13,8 @@ import math
 import itertools
 from collections import defaultdict
 
-# ---------------------
-# -- Print Functions --
-# ---------------------
-
-def print_pmf(pmf, name='p(x)'):
-	print "\n-- " + name + " --"
-	for x in pmf.keys():
-		print "  " + name[:-1] + " = " + x + ") =", round(pmf[x], 3)
-	print "----------\n"
-
-def print_coding_distr(coding_distr):
-	print "\n-- Coding Distr --"
-	for x in coding_distr.keys():
-		print "x =", x
-		for code in coding_distr[x]:
-			print "  p(code = " + code + " | x = " + x + "):", round(coding_distr[x][code], 3)
-		print
-	print "--------------"
-
-# -----------------------
-# -- Info Theory Funcs --
-# -----------------------
-
-def entropy(pmf):
-	'''
-	Args:
-		pmf (dict)
-
-	Returns:
-		(float)
-	'''
-	total = 0
-	for x in pmf.keys():
-		if pmf[x] == 0:
-			# Assume log_b 0 = 0.
-			continue
-		total -= pmf[x] * math.log(pmf[x],2)
-
-	return total
-
-def conditional_entropy(pmf_y_given_x, pmf_x):
-	'''
-	Args:
-		pmf_y_given_x
-		pmf_x
-
-	Returns:
-		(float): H(Y | X)
-	'''
-	total = 0
-	for x in pmf_x.keys():
-		for y in pmf_y_given_x[x].keys():
-			if pmf_y_given_x[x][y] == 0:
-				continue
-			total -= pmf_y_given_x[x][y] * pmf_x[x] * math.log(pmf_y_given_x[x][y], 2)
-
-	return total
-
-def mutual_info(pmf_x, pmf_y, pmf_x_given_y):
-	'''
-	Args:
-		pmf_x (dict)
-		pmf_y (dict)
-
-	Returns:
-		(float): I(X; Y) = H(X) - H(X | Y)
-	'''
-	# if entropy(pmf_x) < 0.0:
-	# 	print_pmf(pmf_x)
-	return entropy(pmf_x) - conditional_entropy(pmf_x_given_y, pmf_y)
+# Other imports.
+from rlit_utils import *
 
 # ---------------------
 # -- Misc. Functions --
@@ -214,7 +146,6 @@ def compute_coding_distr(pmf_x, pmf_code, coding_distr, beta=.01):
 
 			numerator = pmf_code[code] * math.exp(-beta * distance(x, code))
 			denominator = _compute_denominator(x, pmf_code, beta)
-
 			new_coding_distr[x][code] = float(numerator) / denominator
 
 	return new_coding_distr
@@ -346,7 +277,7 @@ def make_ba_plot():
 	funcs_to_plot = []
 
 	message_len = 5
-	message_code_len_pairs = [(i, message_len) for i in range(1, message_len + 1, 1)]
+	message_code_len_pairs = [(i, message_len) for i in range(5, message_len + 1, 1)]
 
 	print message_code_len_pairs
 	for code_len, message_len in message_code_len_pairs:

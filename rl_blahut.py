@@ -7,33 +7,14 @@ import numpy as np
 from collections import defaultdict
 
 # Other imports.
-from simple_rl.agents import QLearningAgent
-from simple_rl.tasks import ChainMDP
-from simple_rl.tasks import FourRoomMDP
+from simple_rl.abstraction.state_abs.ProbStateAbstractionClass import ProbStateAbstraction
+from simple_rl.abstraction.AbstractionWrapperClass import AbstractionWrapper
+from simple_rl.agents import QLearningAgent, FixedPolicyAgent, RandomAgent
+from simple_rl.tasks import FourRoomMDP, GridWorldMDP
 from simple_rl.planning import ValueIteration
 from simple_rl.run_experiments import run_agents_on_mdp
-from blahut_arimoto import print_coding_distr
-
-# -------------------
-# -- Entropy Funcs --
-# -------------------
-
-def kl(pmf_p, pmf_q):
-    '''
-    Args:
-        pmf_p (dict)
-        pmf_q (dict)
-
-    Returns:
-        (float)
-    '''
-    kl_divergence = 0.0
-    for x in pmf_p.keys():
-        if pmf_q[x] > 0.0:  # Avoid division by zero.
-            if pmf_p[x] == 0.0:
-                return float('inf')
-            kl_divergence += pmf_p[x] * math.log(pmf_p[x] / pmf_q[x])
-    return kl_divergence
+from blahut_arimoto import print_coding_distr, print_pmf, mutual_info
+from rlit_utils import *
 
 def get_pmf_policy(policy, state_space, sample_rate=5):
     '''
@@ -54,6 +35,19 @@ def get_pmf_policy(policy, state_space, sample_rate=5):
 
     return pmf_policy
 
+def get_lambda_policy(policy):
+    '''
+    Args:
+        policy (dict): K=State --> V=Dict, K=Action --> V=Probability
+
+    Returns:
+        (lambda)
+    '''
+    def pmf_policy(state):
+        sampled_a_index = np.random.multinomial(1, policy[state].values()).tolist().index(1)
+        return policy[state].keys()[sampled_a_index]
+
+    return pmf_policy
 # -----------------------------
 # -- Iterative BA Like Steps --
 # -----------------------------
@@ -71,7 +65,7 @@ def compute_prob_of_s_phi(pmf_s, coding_distr, beta):
 def _compute_denominator(s, pmf_s_phi, pi, abstr_pi, beta):
     '''
     '''
-    return sum([pmf_s_phi[s_phi] * math.exp(-beta * kl(pi[s], abstr_pi[s_phi])) for s_phi in pmf_s_phi.keys()])
+    return sum([pmf_s_phi[s_phi] * math.exp(-beta * l1_distance(pi[s], abstr_pi[s_phi])) for s_phi in pmf_s_phi.keys()])
 
 def compute_coding_distr(pmf_s, pmf_s_phi, demonstrator_policy, ground_states, abstr_pi, beta):
     '''
@@ -89,14 +83,14 @@ def compute_coding_distr(pmf_s, pmf_s_phi, demonstrator_policy, ground_states, a
     Notes:
 
     '''
-    pi = get_pmf_policy(demonstrator_policy, ground_states)
+    pmf_pi = get_pmf_policy(demonstrator_policy, ground_states)
     new_coding_distr = defaultdict(lambda: defaultdict(float))
 
-    for s in pmf_s.keys():
+    for s in ground_states:
         for s_phi in pmf_s_phi.keys():
-            numerator = pmf_s_phi[s_phi] * math.exp(-beta * kl(pi[s], abstr_pi[s_phi]))
-            denominator = _compute_denominator(s, pmf_s_phi, pi, abstr_pi, beta)
-
+            numerator = pmf_s_phi[s_phi] * math.exp(-beta * l1_distance(pmf_pi[s], abstr_pi[s_phi]))
+            denominator = _compute_denominator(s, pmf_s_phi, pmf_pi, abstr_pi, beta)
+            
             new_coding_distr[s][s_phi] = float(numerator) / denominator
 
     return new_coding_distr
@@ -116,6 +110,16 @@ def compute_inv_coding_distr(pmf_s, pmf_s_phi, coding_distr):
 
 
 def compute_abstr_policy(demonstrator_policy, ground_states, actions, inv_coding_distr):
+    '''
+    Args:
+        demonstrator_policy (lambda : s --> a)
+        ground_states (list)
+        actions (list)
+        inv_coding_distr (dict)
+
+    Returns:
+        (dict)
+    '''
     pi = get_pmf_policy(demonstrator_policy, ground_states)
     abstr_pi = defaultdict(lambda: defaultdict(float))
 
@@ -213,21 +217,30 @@ def init_uniform_pi(pmf, actions):
 # -- Blahut Arimoto RL Main Steps --
 # ----------------------------------
 
-def main():
+def run_barley(mdp, iters=200, beta=200.0):
+    '''
+    Args:
+        mdp (simple_rl.MDP)
+        iters (int)
+        beta (float)
+
+    Returns:
+        (dict): P(s_phi)
+        (dict): P(s_phi | s)
+        (dict): P(a | s_phi)
+
+    Summary:
+        Runs the Blahut-Arimoto like algorithm for the given mdp.
+    '''
     # Setup MDP, Agents.
-    mdp = FourRoomMDP(width=5, height=5, init_loc=(1, 1), goal_locs=[(5, 5)], gamma=0.95)
 
     # Make demonstrator policy.
-    four_room_vi = ValueIteration(mdp)
-    four_room_vi.run_vi()
-    ground_states = four_room_vi.get_states()
+    demo_vi = ValueIteration(mdp)
+    demo_vi.run_vi()
+    ground_states = demo_vi.get_states()
     actions = mdp.get_actions()
-    num_ground_states = four_room_vi.get_num_states()
-    demonstrator_policy = four_room_vi.policy
-
-    # Hyperparameters.
-    beta = 100.0
-    iters = 40
+    num_ground_states = demo_vi.get_num_states()
+    demonstrator_policy = demo_vi.policy
 
     # Init distributions. (stationary distributions)
     pmf_s = get_stationary_rho_from_policy(demonstrator_policy, mdp)
@@ -247,13 +260,46 @@ def main():
 
         # (C) Compute \pi_\phi.
         inv_coding_distr = compute_inv_coding_distr(pmf_s, pmf_s_phi, coding_distr)
+
         abstr_pi = compute_abstr_policy(demonstrator_policy, ground_states, actions, inv_coding_distr)
 
     print_coding_distr(coding_distr)
-    # for k, v in coding_distr.iteritems():
-    #     print k , 
 
     return pmf_s_phi, coding_distr, abstr_pi
+
+def main():
+    # Make MDP.
+    mdp = FourRoomMDP(width=7, height=7, init_loc=(1, 1), goal_locs=[(7, 7)], gamma=0.95)
+
+    # Run BARLEY.
+    pmf_s_phi, coding_distr, abstr_pi = run_barley(mdp)
+
+    # Make demonstrator policy.
+    demo_vi = ValueIteration(mdp)
+    demo_vi.run_vi()
+    demonstrator_policy = demo_vi.policy
+    demo_agent = FixedPolicyAgent(demonstrator_policy, name="$\\pi_d$")
+
+    # Make abstract agents.
+    lambda_abstr_policy = get_lambda_policy(abstr_pi)
+    prob_s_phi = ProbStateAbstraction(coding_distr)
+    abstr_agent = AbstractionWrapper(FixedPolicyAgent, actions=mdp.get_actions(), state_abstr=prob_s_phi, agent_params={"policy":lambda_abstr_policy, "name":"$\\pi_\\phi$"}, name_ext="")
+    rand_agent = RandomAgent(mdp.get_actions())
+
+    total = 0
+    s_phi_set = set([])
+    for s in coding_distr:
+        for s_phi in coding_distr[s]:
+            if coding_distr[s][s_phi] > 0 and s_phi not in s_phi_set:
+                s_phi_set.add(s_phi)
+                print coding_distr[s][s_phi]
+
+    # Run.
+    run_agents_on_mdp([demo_agent, abstr_agent, rand_agent], mdp, episodes=1)
+
+    print "\nState Spaces Sizes:"
+    print "\t|S_\\phi| =", len(s_phi_set)
+    print "\t|S| =", len(demo_vi.get_states()), "\n\n"
 
 if __name__ == "__main__":
     main()

@@ -17,7 +17,7 @@ from simple_rl.run_experiments import run_agents_on_mdp
 from blahut_arimoto import print_coding_distr, print_pmf, mutual_info
 from rlit_utils import *
 
-distance_func = kl
+distance_func = l1_distance
 
 def get_pmf_policy(policy, state_space, actions, sample_rate=20):
     '''
@@ -112,10 +112,10 @@ def compute_coding_distr(pmf_s, pmf_s_phi, demo_policy, abstr_policy, ground_sta
             denominator = _compute_denominator(s, pmf_s_phi, pmf_pi, abstr_policy, beta)
 
             # TODO: divide by zero?
-            if denominator == 0:
-                new_coding_distr[s][s_phi] = 0
-            else:
-                new_coding_distr[s][s_phi] = float(numerator) / denominator
+            # if denominator == 0:
+            #     new_coding_distr[s][s_phi] = 0
+            # else:
+            new_coding_distr[s][s_phi] = float(numerator) / denominator
 
     # TODO: KL is infinity everywhere initially. 
     # So: the first coding distribution we find sets 0 prob to all abstract states.
@@ -301,9 +301,9 @@ def _barley_s_phi_size_plot_wrapper(x, param_dict):
 
     return s_phi_size
 
-# ----------------------------------
-# -- Blahut Arimoto RL Main Steps --
-# ----------------------------------
+# -----------------------
+# -- BARLEY Main Steps --
+# -----------------------
 
 def barley(mdp, iters=100, beta=5.0, convergence_threshold=0.0001):
     '''
@@ -333,6 +333,7 @@ def barley(mdp, iters=100, beta=5.0, convergence_threshold=0.0001):
     pmf_s = get_stationary_rho_from_policy(demo_policy, mdp)
     coding_distr = init_identity_phi(ground_states)
     pmf_s_phi = compute_prob_of_s_phi(pmf_s, coding_distr, ground_states, beta=beta)
+    abstract_states = pmf_s_phi.keys()
     abstr_pi = init_uniform_pi(pmf_s_phi, actions)
 
     # Blahut.
@@ -340,24 +341,27 @@ def barley(mdp, iters=100, beta=5.0, convergence_threshold=0.0001):
         print 'Iteration {0} of {1}'.format(i+1, iters)
 
         # (A) Compute \rho(s).
-        pmf_s_phi = compute_prob_of_s_phi(pmf_s, coding_distr, ground_states, beta=beta)
+        next_pmf_s_phi = compute_prob_of_s_phi(pmf_s, coding_distr, ground_states, beta=beta)
 
         # (B) Compute \phi.
         next_coding_distr = compute_coding_distr(pmf_s, pmf_s_phi, demo_policy, abstr_pi, ground_states, actions, beta=beta)
 
-        print next_coding_distr
-
         # (C) Compute \pi_\phi.
-        abstr_pi = compute_abstr_policy(demo_policy, ground_states, actions, next_coding_distr, pmf_s, pmf_s_phi)
-
-        print abstr_pi
+        next_abstr_pi = compute_abstr_policy(demo_policy, ground_states, actions, next_coding_distr, pmf_s, pmf_s_phi)
 
         # Check if we're converged.
-        if max([distance_func(next_coding_distr[s], coding_distr[s]) for s in ground_states]) < convergence_threshold:
+        is_coding_converged = max([l1_distance(next_coding_distr[s], coding_distr[s]) for s in ground_states]) < convergence_threshold
+        is_policy_converged = max([l1_distance(next_abstr_pi[s_phi], abstr_pi[s_phi]) for s_phi in abstract_states]) < convergence_threshold
+        is_pmf_s_phi_converged = l1_distance(next_pmf_s_phi, pmf_s_phi) < convergence_threshold
+        
+        if is_coding_converged and is_policy_converged and is_pmf_s_phi_converged:
+            print "Converged."
             break
         
         # Iterate.
+        pmf_s_phi = next_pmf_s_phi
         coding_distr = next_coding_distr
+        abstr_pi = next_abstr_pi
 
     return pmf_s_phi, coding_distr, abstr_pi
 
@@ -381,8 +385,8 @@ def get_sa_size_from_coding_distr(coding_distr):
 
 def barley_compare_policies():
     # Make MDP.
-    # mdp = GridWorldMDP(width=2, height=3, init_loc=(1, 1), goal_locs=[(2, 3)], gamma=0.95)
-    mdp = GridWorldMDP(width=10, height=10, init_loc=(1, 1), goal_locs=[(9, 9)], gamma=0.95)
+    mdp = GridWorldMDP(width=4, height=4, init_loc=(1, 1), goal_locs=[(3, 3)], gamma=0.95)
+    # mdp = GridWorldMDP(width=10, height=10, init_loc=(1, 1), goal_locs=[(9, 9)], gamma=0.95)
 
     # Run BARLEY.
     pmf_s_phi, coding_distr, abstr_pi = barley(mdp)

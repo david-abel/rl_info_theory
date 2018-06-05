@@ -345,8 +345,6 @@ def barley(mdp, iters=100, beta=5.0, convergence_threshold=0.001):
         next_coding_distr = compute_coding_distr(pmf_s, pmf_s_phi, demo_policy, abstr_pi, ground_states, actions, beta=beta)
 
         # (C) Compute \pi_\phi.
-        # inv_coding_distr = compute_inv_coding_distr(pmf_s, pmf_s_phi, ground_states, next_coding_distr)
-
         abstr_pi = compute_abstr_policy(demo_policy, ground_states, actions, next_coding_distr, pmf_s, pmf_s_phi)
 
         # Check if we're converged.

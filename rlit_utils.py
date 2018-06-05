@@ -33,7 +33,8 @@ def kl(pmf_p, pmf_q):
         if pmf_q[x] > 0.0:  # Avoid division by zero.
             if pmf_p[x] == 0.0:
                 return float('inf')
-            kl_divergence += pmf_p[x] * math.log(pmf_p[x] / pmf_q[x])
+
+            kl_divergence += pmf_p[x] * math.log(pmf_p[x] / pmf_q[x], 2)
     return kl_divergence
 
 def entropy(pmf):
@@ -49,7 +50,8 @@ def entropy(pmf):
         if pmf[x] == 0:
             # Assume log_b 0 = 0.
             continue
-        total -= pmf[x] * math.log(pmf[x],2)
+
+        total -= pmf[x] * math.log(pmf[x], 2)
 
     return total
 

@@ -213,15 +213,62 @@ def init_uniform_pi(pmf, actions):
 
     return new_pi
 
-# ----------------------------------
+# -----------------------------
 # -- Blahut Arimoto Plotting --
-# ----------------------------------
+# -----------------------------
+
+def make_ba_plot():
+    '''
+    Summary:
+        Creates a plot showcasing the pmfs of the distributions
+        computed by the blahut arimoto algorithm.
+    '''
+    from func_plotting import PlotFunc
+
+    # Choose code-message combos to plot.
+    funcs_to_plot = []
+
+    # Set relevant params.
+    mdp = FourRoomMDP(width=7, height=7, init_loc=(1, 1), goal_locs=[(7, 7)], gamma=0.95)
+    param_dict = {"mdp":mdp, "iters":1000, "convergence_threshold":0.005}
+
+    # Make plot func object.
+    plot_beta_vs_s_phi_size = PlotFunc(_barley_s_phi_size_plot_wrapper, param_dict=param_dict, x_min=0.0, x_max=5.0, x_interval=1)
+
+    # Hang on to it.
+    funcs_to_plot.append(plot_beta_vs_s_phi_size)
+
+    # Plot.
+    from func_plotting import plot_funcs
+    plot_funcs(funcs_to_plot, title="BARLEY: $\\beta$  vs. $|S_\\phi|$", x_label="$\\beta$", y_label="$|S_\\phi|$")
+
+def _barley_s_phi_size_plot_wrapper(x, param_dict):
+    '''
+    Args:
+        x (float): stands for $\beta$ in the BARLEY algorithm.
+        param_dict (dict): contains relevant parameters for plotting.
+
+    Returns:
+        (int): The size of the computed abstract state space.
+
+    Notes:
+        This serves as a wrapper to cooperate with PlotFunc.
+    '''
+    mdp = param_dict["mdp"]
+    iters = param_dict["iters"]
+    convergence_threshold = param_dict["convergence_threshold"]
+
+    pmf_code, coding_distr, abstr_pi = barley(mdp, beta=x, iters=iters, convergence_threshold=convergence_threshold)
+
+    s_phi_size = get_sa_size_from_coding_distr(coding_distr)
+
+    return s_phi_size
 
 # ----------------------------------
 # -- Blahut Arimoto RL Main Steps --
 # ----------------------------------
 
-def run_barley(mdp, iters=100, beta=5.0, convergence_threshold=0.001):
+def barley(mdp, iters=100, beta=5.0, convergence_threshold=0.001):
     '''
     Args:
         mdp (simple_rl.MDP)
@@ -267,7 +314,6 @@ def run_barley(mdp, iters=100, beta=5.0, convergence_threshold=0.001):
 
         # Check if we're converged.
         if max([kl(next_coding_distr[s], coding_distr[s]) for s in ground_states]) < convergence_threshold:
-            print "Converged at iter:", i, "KL:", max([kl(next_coding_distr[s], coding_distr[s]) for s in ground_states]) 
             break
         
         # Iterate.
@@ -277,12 +323,31 @@ def run_barley(mdp, iters=100, beta=5.0, convergence_threshold=0.001):
 
     return pmf_s_phi, coding_distr, abstr_pi
 
-def main():
+def get_sa_size_from_coding_distr(coding_distr):
+    '''
+    Args:
+        coding_distr (dict)
+
+    Returns:
+        (int)
+    '''
+    # Print out coding distr.
+    total = 0
+    s_phi_set = set([])
+    for s in coding_distr:
+        for s_phi in coding_distr[s]:
+            if coding_distr[s][s_phi] > 0 and s_phi not in s_phi_set:
+                s_phi_set.add(s_phi)
+                # print s, s_phi, coding_distr[s][s_phi]
+
+    return len(s_phi_set)
+
+def barley_compare_policies():
     # Make MDP.
     mdp = FourRoomMDP(width=9, height=9, init_loc=(1, 1), goal_locs=[(9, 9)], gamma=0.95)
 
     # Run BARLEY.
-    pmf_s_phi, coding_distr, abstr_pi = run_barley(mdp)
+    pmf_s_phi, coding_distr, abstr_pi = barley(mdp)
 
     # Make demonstrator policy.
     demo_vi = ValueIteration(mdp)
@@ -296,21 +361,25 @@ def main():
     abstr_agent = AbstractionWrapper(FixedPolicyAgent, state_abstr=prob_s_phi, agent_params={"policy":lambda_abstr_policy, "name":"$\\pi_\\phi$"}, name_ext="")
     rand_agent = RandomAgent(mdp.get_actions())
 
-    # Print out coding distr.
-    total = 0
-    s_phi_set = set([])
-    for s in coding_distr:
-        for s_phi in coding_distr[s]:
-            if coding_distr[s][s_phi] > 0 and s_phi not in s_phi_set:
-                s_phi_set.add(s_phi)
-                # print s, s_phi, coding_distr[s][s_phi]
-
     # Run.
     run_agents_on_mdp([demo_agent, abstr_agent, rand_agent], mdp, episodes=1)
 
+    # Print state space sizes.
+    abstr_state_space_size = get_sa_size_from_coding_distr(coding_distr)
     print "\nState Spaces Sizes:"
     print "\t|S_\\phi| =", len(s_phi_set)
     print "\t|S| =", len(demo_vi.get_states()), "\n\n"
+
+def main():
+
+    exp_type = "beta_plot"
+
+    if exp_type == "beta_plot":
+        make_ba_plot()
+    elif exp_type == "compare_policies":
+        barley_compare_policies()
+
+
 
 if __name__ == "__main__":
     main()

@@ -214,15 +214,20 @@ def init_uniform_pi(pmf, actions):
     return new_pi
 
 # ----------------------------------
+# -- Blahut Arimoto Plotting --
+# ----------------------------------
+
+# ----------------------------------
 # -- Blahut Arimoto RL Main Steps --
 # ----------------------------------
 
-def run_barley(mdp, iters=200, beta=200.0):
+def run_barley(mdp, iters=100, beta=5.0, convergence_threshold=0.001):
     '''
     Args:
         mdp (simple_rl.MDP)
         iters (int)
         beta (float)
+        convergence_threshold (float): When KL(phi_{t+1}, phi_t) < @convergence_threshold, we stop iterating.
 
     Returns:
         (dict): P(s_phi)
@@ -232,8 +237,6 @@ def run_barley(mdp, iters=200, beta=200.0):
     Summary:
         Runs the Blahut-Arimoto like algorithm for the given mdp.
     '''
-    # Setup MDP, Agents.
-
     # Make demonstrator policy.
     demo_vi = ValueIteration(mdp)
     demo_vi.run_vi()
@@ -256,20 +259,27 @@ def run_barley(mdp, iters=200, beta=200.0):
         pmf_s_phi = compute_prob_of_s_phi(pmf_s, coding_distr, beta=beta)
 
         # (B) Compute \phi.
-        coding_distr = compute_coding_distr(pmf_s, pmf_s_phi, demonstrator_policy, ground_states, abstr_pi, beta=beta)
+        next_coding_distr = compute_coding_distr(pmf_s, pmf_s_phi, demonstrator_policy, ground_states, abstr_pi, beta=beta)
 
         # (C) Compute \pi_\phi.
         inv_coding_distr = compute_inv_coding_distr(pmf_s, pmf_s_phi, coding_distr)
-
         abstr_pi = compute_abstr_policy(demonstrator_policy, ground_states, actions, inv_coding_distr)
 
-    print_coding_distr(coding_distr)
+        # Check if we're converged.
+        if max([kl(next_coding_distr[s], coding_distr[s]) for s in ground_states]) < convergence_threshold:
+            print "Converged at iter:", i, "KL:", max([kl(next_coding_distr[s], coding_distr[s]) for s in ground_states]) 
+            break
+        
+        # Iterate.
+        coding_distr = next_coding_distr
+
+    # print_coding_distr(coding_distr)
 
     return pmf_s_phi, coding_distr, abstr_pi
 
 def main():
     # Make MDP.
-    mdp = FourRoomMDP(width=7, height=7, init_loc=(1, 1), goal_locs=[(7, 7)], gamma=0.95)
+    mdp = FourRoomMDP(width=9, height=9, init_loc=(1, 1), goal_locs=[(9, 9)], gamma=0.95)
 
     # Run BARLEY.
     pmf_s_phi, coding_distr, abstr_pi = run_barley(mdp)
@@ -283,16 +293,17 @@ def main():
     # Make abstract agents.
     lambda_abstr_policy = get_lambda_policy(abstr_pi)
     prob_s_phi = ProbStateAbstraction(coding_distr)
-    abstr_agent = AbstractionWrapper(FixedPolicyAgent, actions=mdp.get_actions(), state_abstr=prob_s_phi, agent_params={"policy":lambda_abstr_policy, "name":"$\\pi_\\phi$"}, name_ext="")
+    abstr_agent = AbstractionWrapper(FixedPolicyAgent, state_abstr=prob_s_phi, agent_params={"policy":lambda_abstr_policy, "name":"$\\pi_\\phi$"}, name_ext="")
     rand_agent = RandomAgent(mdp.get_actions())
 
+    # Print out coding distr.
     total = 0
     s_phi_set = set([])
     for s in coding_distr:
         for s_phi in coding_distr[s]:
             if coding_distr[s][s_phi] > 0 and s_phi not in s_phi_set:
                 s_phi_set.add(s_phi)
-                print coding_distr[s][s_phi]
+                # print s, s_phi, coding_distr[s][s_phi]
 
     # Run.
     run_agents_on_mdp([demo_agent, abstr_agent, rand_agent], mdp, episodes=1)

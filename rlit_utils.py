@@ -32,7 +32,7 @@ def kl(pmf_p, pmf_q):
     for x in pmf_p.keys():
         if pmf_p[x] > 0.0:  # Avoid division by zero.
             if pmf_q[x] == 0.0:
-                return float("inf")
+                return float('inf')
 
             kl_divergence += pmf_p[x] * math.log(pmf_p[x] / pmf_q[x], 2)
     return kl_divergence

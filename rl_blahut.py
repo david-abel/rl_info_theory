@@ -83,7 +83,8 @@ def _compute_denominator(s, pmf_s_phi, pi, abstr_pi, beta):
     Returns:
         (float)
     '''
-    return sum([pmf_s_phi[s_phi] * math.exp(-beta * distance_func(pi[s], abstr_pi[s_phi])) for s_phi in pmf_s_phi.keys()])
+    r = sum([pmf_s_phi[s_phi] * math.exp(-beta * distance_func(pi[s], abstr_pi[s_phi])) for s_phi in pmf_s_phi.keys()])
+    return r
 
 def compute_coding_distr(pmf_s, pmf_s_phi, demo_policy, abstr_policy, ground_states, actions, beta):
     '''
@@ -155,7 +156,7 @@ def compute_abstr_policy(demo_policy, ground_states, actions, coding_distr, pmf_
                 # TODO: Another case of divide by zero?
                 if pmf_s_phi[s_phi] == 0:
                     continue
-                total += pi[s][a] * coding_distr[s_phi][s] * (pmf_s[s] / pmf_s_phi[s_phi])
+                total += pi[s][a] * coding_distr[s][s_phi] * (pmf_s[s] / pmf_s_phi[s_phi])
             abstr_pi[s_phi][a] = total
 
     return abstr_pi
@@ -304,7 +305,7 @@ def _barley_s_phi_size_plot_wrapper(x, param_dict):
 # -- Blahut Arimoto RL Main Steps --
 # ----------------------------------
 
-def barley(mdp, iters=100, beta=5.0, convergence_threshold=0.001):
+def barley(mdp, iters=100, beta=5.0, convergence_threshold=0.0001):
     '''
     Args:
         mdp (simple_rl.MDP)
@@ -344,8 +345,12 @@ def barley(mdp, iters=100, beta=5.0, convergence_threshold=0.001):
         # (B) Compute \phi.
         next_coding_distr = compute_coding_distr(pmf_s, pmf_s_phi, demo_policy, abstr_pi, ground_states, actions, beta=beta)
 
+        print next_coding_distr
+
         # (C) Compute \pi_\phi.
         abstr_pi = compute_abstr_policy(demo_policy, ground_states, actions, next_coding_distr, pmf_s, pmf_s_phi)
+
+        print abstr_pi
 
         # Check if we're converged.
         if max([distance_func(next_coding_distr[s], coding_distr[s]) for s in ground_states]) < convergence_threshold:
@@ -376,7 +381,8 @@ def get_sa_size_from_coding_distr(coding_distr):
 
 def barley_compare_policies():
     # Make MDP.
-    mdp = GridWorldMDP(width=2, height=3, init_loc=(1, 1), goal_locs=[(2, 3)], gamma=0.95)
+    # mdp = GridWorldMDP(width=2, height=3, init_loc=(1, 1), goal_locs=[(2, 3)], gamma=0.95)
+    mdp = GridWorldMDP(width=10, height=10, init_loc=(1, 1), goal_locs=[(9, 9)], gamma=0.95)
 
     # Run BARLEY.
     pmf_s_phi, coding_distr, abstr_pi = barley(mdp)
@@ -395,7 +401,7 @@ def barley_compare_policies():
     rand_agent = RandomAgent(mdp.get_actions())
 
     # Run.
-    run_agents_on_mdp([demo_agent, abstr_agent, rand_agent], mdp, episodes=1)
+    run_agents_on_mdp([demo_agent, abstr_agent, rand_agent], mdp, episodes=1, steps=1000)
 
     # Print state space sizes.
     abstr_state_space_size = get_sa_size_from_coding_distr(coding_distr)

@@ -1,1 +1,4 @@
 *.pyc
+.idea/
+results/
+func_plot.pdf

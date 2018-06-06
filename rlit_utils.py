@@ -119,3 +119,7 @@ def print_coding_distr(coding_distr):
             print "  p(code = " + str(code) + " | x = " + str(x) + "):", round(coding_distr[x][code], 3)
         print
     print "--------------"
+
+# ---------------------
+# -- Print Functions --
+# ---------------------

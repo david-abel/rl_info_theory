@@ -37,12 +37,15 @@ class PlotFunc(object):
 
     def plot(self, series_id=0, log_scale=False):
         '''
+        Args:
+            series_id (int)
+            log_scale (bool)
+            use_legend (bool)
+
         Summary:
             Make a basic plot, passing in the xrange defined by self.x_min, self.x_max, self.x_interval
             to the self.func.
         '''
-        # Puts the legend into the best location in the plot and use a tight layout.
-        pyplot.rcParams['legend.loc'] = 'best'
         x_range = numpy.arange(self.x_min, self.x_max, self.x_interval)
         if log_scale:
             y_range = [math.log(self.func(x)) for x in x_range] if self.param_dict is {} else [math.log(self.func(x, self.param_dict)) for x in x_range]
@@ -58,10 +61,14 @@ class PlotFunc(object):
 
         pyplot.plot(x_range, y_range, marker=PlotFunc._markers[series_id], color=PlotFunc._colors[series_id], label=self.series_name)
 
-def plot_funcs(funcs, file_name="func_plot", title="X versus Y", x_label="X", y_label="Y", log_scale=False):
+def plot_funcs(funcs, file_name="func_plot", title="X versus Y", x_label="X", y_label="Y", log_scale=False, use_legend=True):
     '''
     Args:
         funcs (list of PlotFuncs)
+        file_name (str)
+        title (str)
+        x_label (str)
+        y_label (str)
 
     Summary:
         Plots a bunch of functions together on the same plot.
@@ -70,7 +77,10 @@ def plot_funcs(funcs, file_name="func_plot", title="X versus Y", x_label="X", y_
         func.plot(series_id=i, log_scale=log_scale)
     
     pyplot.rc('text', usetex=True)
-    pyplot.legend()
+    if use_legend:
+        # Puts the legend into the best location in the plot and use a tight layout.
+        pyplot.rcParams['legend.loc'] = 'best'
+        pyplot.legend()
     pyplot.xlabel(x_label)
     pyplot.ylabel(y_label)
     title_suffix = " (Log Scale)" if log_scale else ""

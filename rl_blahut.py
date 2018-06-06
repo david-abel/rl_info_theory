@@ -12,6 +12,7 @@ from simple_rl.abstraction.state_abs.ProbStateAbstractionClass import ProbStateA
 from simple_rl.abstraction.AbstractionWrapperClass import AbstractionWrapper
 from simple_rl.agents import QLearningAgent, FixedPolicyAgent, RandomAgent
 from simple_rl.tasks import FourRoomMDP, GridWorldMDP, ChainMDP
+from simple_rl.mdp import State
 from simple_rl.planning import ValueIteration
 from simple_rl.run_experiments import run_agents_on_mdp, evaluate_agent
 from blahut_arimoto import print_coding_distr, print_pmf, mutual_info
@@ -223,7 +224,7 @@ def init_random_phi(ground_states):
     for id, s_g in enumerate(ground_states):
         s_phi_map = random.choice(range(len(ground_states)))
         for s_phi in xrange(len(ground_states)):
-            new_coding_distr[s_g][s_phi] = int(s_phi_map == s_phi)
+            new_coding_distr[s_g][State(s_phi)] = int(s_phi_map == s_phi)
 
     return new_coding_distr
 
@@ -240,7 +241,7 @@ def init_identity_phi(ground_states):
 	# Initialize the identity distribution
 	for id, s_g in enumerate(ground_states):
 		for s_phi in xrange(len(ground_states)):
-			new_coding_distr[s_g][s_phi] =  int(id == s_phi)
+			new_coding_distr[s_g][State(s_phi)] =  int(id == s_phi)
 
 	return new_coding_distr
 
@@ -257,7 +258,7 @@ def init_uniform_phi(num_ground_states):
     # Initialize the identity distribution
     for s_g in range(num_ground_states):
         for s_phi in range(num_ground_states):
-            new_coding_distr[s_g][s_phi] =  1.0 / num_ground_states
+            new_coding_distr[s_g][State(s_phi)] =  1.0 / num_ground_states
 
     return new_coding_distr
 
@@ -272,7 +273,7 @@ def init_random_rho_phi(ground_states):
     new_rho_phi = defaultdict(float)
     state_distr = np.random.dirichlet([0.5] * len(ground_states)).tolist()
     for i in range(len(ground_states)):
-        new_rho_phi[i] = state_distr[i]
+        new_rho_phi[State(i)] = state_distr[i]
 
     return new_rho_phi
 
@@ -610,7 +611,7 @@ def barley_compare_policies():
 
 def main():
 
-    exp_type = "beta_plot_state_size"
+    exp_type = "beta_plot_value"
 
     if exp_type == "beta_plot_state_size":
         # Makes a plot comparing beta (x-axis) vs. the abstract state space size (y-axis).

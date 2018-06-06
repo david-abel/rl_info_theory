@@ -17,7 +17,7 @@ from simple_rl.run_experiments import run_agents_on_mdp, evaluate_agent
 from blahut_arimoto import print_coding_distr, print_pmf, mutual_info
 from rlit_utils import *
 
-distance_func = kl
+distance_func = l1_distance
 
 # ----------------------
 # -- Policy Utilities --
@@ -447,8 +447,14 @@ def make_det_policy_eps_greedy(lambda_policy, ground_states, actions, epsilon=0.
 # -- BARLEY Plotting --
 # ---------------------
 
-def make_barley_plot(plotting_helper_func, x_label="$\\beta$", y_label="$|S_\\phi|$"):
+def make_barley_plot(plotting_helper_func, file_name="barley", x_label="$\\beta$", y_label="$|S_\\phi|$"):
     '''
+    Args:
+        plotting_helper_func (lambda : _ --> numeric)
+        file_name (str)
+        x_label (str)
+        y_label (str)
+
     Summary:
         Creates a plot showcasing the pmfs of the distributions
         computed by the blahut arimoto algorithm.
@@ -456,17 +462,48 @@ def make_barley_plot(plotting_helper_func, x_label="$\\beta$", y_label="$|S_\\ph
     from func_plotting import PlotFunc
 
     # Set relevant params.
-    mdp = FourRoomMDP(width=5, height=5, init_loc=(1, 1), goal_locs=[(5, 5)], gamma=0.9)
+    grid_dim = 5
+    mdp = FourRoomMDP(width=grid_dim, height=grid_dim, init_loc=(1, 1), goal_locs=[(grid_dim, grid_dim)], gamma=0.9)
     # mdp = GridWorldMDP(width=5, height=5, init_loc=(1, 1), goal_locs=[(3, 3)], gamma=0.9)
     param_dict = {"mdp":mdp, "iters":200, "convergence_threshold":0.0001}
 
     # Make plot func object.
-    barley_plot_beta_vs = PlotFunc(plotting_helper_func, series_name="$\\phi_\\Pr$", param_dict=dict(param_dict.items() + {"use_crisp_sa":False}.items()), x_min=0.0, x_max=2.0, x_interval=0.1)
-    barley_plot_beta_vs_crisp = PlotFunc(plotting_helper_func, series_name="$\\phi_\\{crisp}$", param_dict=dict(param_dict.items() + {"use_crisp_sa":True}.items()), x_min=0.0, x_max=2.0, x_interval=0.1)
+    x_min, x_max, x_interval = 0.0, grid_dim, grid_dim / 20.0
+
+    if "|S" in y_label:
+        # Show ground state space size.
+        vi = ValueIteration(mdp)
+        num_ground_states = len(vi.get_states())
+        def plot_func_num_ground_states(x, param_dict):
+            return num_ground_states
+        ground_plot = PlotFunc(plot_func_num_ground_states, series_name="$|S|$", param_dict={}, x_min=x_min, x_max=x_max, x_interval=x_interval)
+
+        regular_series_name = "$|S_{\\phi-\\Pr}|$"
+        crispy_series_name = "$|S_{\\phi}|$"
+
+    elif "V" in y_label:
+        # Show demo policy value.
+        vi = ValueIteration(mdp)
+        vi.run_vi()
+        demo_agent = FixedPolicyAgent(vi.policy)
+        val = evaluate_agent(demo_agent, mdp, instances=10)
+
+        def plot_func_demo_pol_value(x, param_dict):
+            return val
+
+        regular_series_name = "$\\pi^{\\phi-\\Pr}$"
+        crispy_series_name = "$\\pi^{\\phi}$"
+
+        ground_plot = PlotFunc(plot_func_demo_pol_value, series_name="$\\pi_d$", param_dict={}, x_min=x_min, x_max=x_max, x_interval=x_interval)
+
+
+    # Make barley plots.
+    barley_plot_beta_vs = PlotFunc(plotting_helper_func, series_name=regular_series_name, param_dict=dict(param_dict.items() + {"use_crisp_sa":False}.items()), x_min=x_min, x_max=x_max, x_interval=x_interval)
+    barley_plot_beta_vs_crisp = PlotFunc(plotting_helper_func, series_name=crispy_series_name, param_dict=dict(param_dict.items() + {"use_crisp_sa":True}.items()), x_min=x_min, x_max=x_max, x_interval=x_interval)
 
     # Plot.
     from func_plotting import plot_funcs
-    plot_funcs([barley_plot_beta_vs, barley_plot_beta_vs_crisp], file_name="barley_beta_vs_val", title="BARLEY: " + x_label + " vs. " + y_label, x_label=x_label, y_label=y_label, use_legend=True)
+    plot_funcs([barley_plot_beta_vs, barley_plot_beta_vs_crisp, ground_plot], file_name=file_name, title="BARLEY: " + x_label + " vs. " + y_label, x_label=x_label, y_label=y_label, use_legend=True)
 
 def _barley_val_plot_wrapper(x, param_dict):
     '''
@@ -490,10 +527,9 @@ def _barley_val_plot_wrapper(x, param_dict):
     # Make abstract agent.
     lambda_abstr_policy = get_lambda_policy(abstr_policy)
     prob_s_phi = ProbStateAbstraction(coding_distr)
-    if use_crisp_sa:
-        phi = convert_prob_sa_to_sa(prob_s_phi)
-    else:
-        phi = prob_s_phi
+
+    # Convert to crisp SA if needed.
+    phi = convert_prob_sa_to_sa(prob_s_phi) if use_crisp_sa else prob_s_phi
 
     abstr_agent = AbstractionWrapper(FixedPolicyAgent, state_abstr=phi, agent_params={"policy":lambda_abstr_policy, "name":"$\\pi_\\phi$"}, name_ext="")
     
@@ -517,13 +553,22 @@ def _barley_s_phi_size_plot_wrapper(x, param_dict):
     Notes:
         This serves as a wrapper to cooperate with PlotFunc.
     '''
+    # 
     mdp = param_dict["mdp"]
     iters = param_dict["iters"]
     convergence_threshold = param_dict["convergence_threshold"]
+    use_crisp_sa = param_dict["use_crisp_sa"]
 
+    # Let BARLEY run.
     pmf_code, coding_distr, abstr_policy = barley(mdp, beta=x, iters=iters, convergence_threshold=convergence_threshold)
 
-    s_phi_size = get_sa_size_from_coding_distr(coding_distr)
+    # Check size.
+    prob_s_phi = ProbStateAbstraction(coding_distr)
+    if use_crisp_sa:
+        phi = convert_prob_sa_to_sa(prob_s_phi)
+        s_phi_size = phi.get_num_abstr_states()
+    else:
+        s_phi_size = get_sa_size_from_coding_distr(coding_distr)
 
     return s_phi_size
 
@@ -565,12 +610,14 @@ def barley_compare_policies():
 
 def main():
 
-    exp_type = "beta_plot_value"
+    exp_type = "beta_plot_state_size"
 
     if exp_type == "beta_plot_state_size":
-        make_barley_plot(_barley_s_phi_size_plot_wrapper, y_label="$|S_\\phi|$")
+        # Makes a plot comparing beta (x-axis) vs. the abstract state space size (y-axis).
+        make_barley_plot(_barley_s_phi_size_plot_wrapper, file_name="barley_beta_vs_size", y_label="$|S_\\phi|$")
     elif exp_type == "beta_plot_value":
-        make_barley_plot(_barley_val_plot_wrapper, y_label="$V^{\\pi_\\phi^*}$")
+        # Makes a plot comparing beta (x-axis) vs. the value of the abstract policy + state abstraction (y-axis).
+        make_barley_plot(_barley_val_plot_wrapper, file_name="barley_beta_vs_value", y_label="$V(s_0)$")
     elif exp_type == "compare_policies":
         barley_compare_policies()
 

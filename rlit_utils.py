@@ -1,5 +1,6 @@
 # Python imports.
 import math
+import os
 
 # -------------------
 # -- Entropy Funcs --
@@ -120,6 +121,22 @@ def print_coding_distr(coding_distr):
         print
     print "--------------"
 
-# ---------------------
-# -- Print Functions --
-# ---------------------
+# --------------------
+# -- Misc Functions --
+# --------------------
+
+def write_datum_to_file(file_name, datum, extra_dir=""):
+    '''
+    Summary:
+        Writes @datum to extra_dir/file_name.
+    '''
+    if extra_dir != "" and not os.path.isdir(extra_dir):
+        os.makedirs(extra_dir)
+    out_file = open(os.path.join(extra_dir, file_name) + ".csv", "a+")
+    out_file.write(str(datum) + ",")
+    out_file.close()
+
+def end_of_instance(file_name, extra_dir=""):
+    out_file = open(os.path.join(extra_dir, str(file_name)) + ".csv", "a+")
+    out_file.write("\n")
+    out_file.close()

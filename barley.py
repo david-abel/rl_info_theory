@@ -16,7 +16,7 @@ from simple_rl.mdp import State
 from simple_rl.planning import ValueIteration
 from simple_rl.run_experiments import run_agents_on_mdp, evaluate_agent
 from blahut_arimoto import print_coding_distr, print_pmf, mutual_info
-from plot_barley import make_barley_val_plot
+from plot_barley import make_barley_val_plot, make_barley_num_states_plot
 from rlit_utils import *
 
 distance_func = l1_distance
@@ -397,12 +397,13 @@ def run_barley(mdp, iters=100, beta=20.0, convergence_threshold=0.01):
     print "~"*16
     print "~~ BETA =", beta, "~~"
     print "~"*16
+
     # Make demonstrator policy.
     demo_vi = ValueIteration(mdp)
     demo_vi.run_vi()
     ground_states = demo_vi.get_states()
     actions = mdp.get_actions()
-    num_ground_states = demo_vi.get_num_states()
+    num_ground_states = len(ground_states)
     demo_policy = make_det_policy_eps_greedy(demo_vi.policy, demo_vi.get_states(), mdp.get_actions())
     demo_lambda_policy = get_lambda_policy(demo_policy)
 
@@ -438,13 +439,10 @@ def run_barley(mdp, iters=100, beta=20.0, convergence_threshold=0.01):
         is_policy_converged = policy_update_delta < convergence_threshold
         is_pmf_s_phi_converged = state_distr_update_delta < convergence_threshold
 
-        # Keep:
-
         # Update pointers.
         coding_distr = next_coding_distr
         pmf_s_phi = next_pmf_s_phi
         abstr_policy = next_abstr_policy
-        # print "c, p, s:", round(coding_update_delta, 4), round(policy_update_delta, 4), round(state_distr_update_delta, 4)
 
         if is_coding_converged and is_policy_converged and is_pmf_s_phi_converged:
             print "\tBARLEY Converged."
@@ -510,10 +508,12 @@ def barley_visualize_abstr(beta=2.0):
 
 def main():
 
-    exp_type = "visualize_barley_abstr"
+    exp_type = "plot_barley_val"
 
     if exp_type == "plot_barley_val":
         make_barley_val_plot()
+    if exp_type == "plot_barley_num_states":
+        make_barley_num_states_plot()
     elif exp_type == "compare_policies":
         barley_compare_policies()
     elif exp_type == "visualize_barley_abstr":

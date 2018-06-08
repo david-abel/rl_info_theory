@@ -52,11 +52,11 @@ def make_barley_val_plot(instances=3):
         random.jumpahead(1)
         # For each beta.
         for beta in chart_utils.drange(x_min, x_max, x_increment):
-            crisp_value = _barley_val_plot_wrapper(x=beta, param_dict=dict(param_dict.items() + {"use_crisp_sa":False}.items()))
-            stochastic_value = _barley_val_plot_wrapper(x=beta, param_dict=dict(param_dict.items() + {"use_crisp_sa":True}.items()))
+            crisp_value = _barley_val_plot_wrapper(x=beta, param_dict=dict(param_dict.items() + {"use_crisp_sa":True}.items()))
+            stochastic_value = _barley_val_plot_wrapper(x=beta, param_dict=dict(param_dict.items() + {"use_crisp_sa":False}.items()))
 
             write_datum_to_file(file_name="crisp_val", datum=crisp_value, extra_dir="barley_results")
-            write_datum_to_file(file_name="stochastic_val", datum=crisp_value, extra_dir="barley_results")
+            write_datum_to_file(file_name="stochastic_val", datum=stochastic_value, extra_dir="barley_results")
 
         end_of_instance("crisp_val", extra_dir="barley_results")
         end_of_instance("stochastic_val", extra_dir="barley_results")
@@ -73,6 +73,61 @@ def make_barley_val_plot(instances=3):
     chart_utils.Y_AXIS_END_VAL = None
 
     chart_utils.make_plots("barley_results/", ["crisp_val", "stochastic_val", "demo_val"], cumulative=False, episodic=False, track_disc_reward=False)
+
+def make_barley_num_states_plot(instances=10):
+    '''
+    Args:
+        instances (int)
+
+    Summary:
+        Main plotting function for barley experiments.
+    '''
+
+    # Clear old results.
+    for policy in ["crisp_states", "stochastic_states", "ground_states"]:
+        if os.path.exists(os.path.join("barley_results/", str(policy)) + ".csv"):
+            os.remove(os.path.join("barley_results/", str(policy)) + ".csv")
+
+    # Set relevant params.
+    grid_dim = 5
+    mdp = FourRoomMDP(width=grid_dim, height=grid_dim, init_loc=(1, 1), goal_locs=[(grid_dim, grid_dim)], gamma=0.9)
+    param_dict = {"mdp":mdp, "iters":200, "convergence_threshold":0.0001}
+
+    # Choose beta interval.
+    x_min, x_max, x_increment = 0.0, grid_dim*2, grid_dim / 10.0
+
+    # Get and record num ground states.
+    vi = ValueIteration(mdp)
+    num_ground_states = vi.get_num_states()
+    for beta in chart_utils.drange(x_min, x_max, x_increment):
+        write_datum_to_file(file_name="ground_states", datum=num_ground_states, extra_dir="barley_results")
+
+    # Compute barley.
+    for instance in range(instances):
+
+        random.jumpahead(1)
+        # For each beta.
+        for beta in chart_utils.drange(x_min, x_max, x_increment):
+            stochastic_num_states = _barley_s_phi_size_plot_wrapper(x=beta, param_dict=dict(param_dict.items() + {"use_crisp_sa":False}.items()))
+            crisp_num_states = _barley_s_phi_size_plot_wrapper(x=beta, param_dict=dict(param_dict.items() + {"use_crisp_sa":True}.items()))
+
+            write_datum_to_file(file_name="crisp_states", datum=crisp_num_states, extra_dir="barley_results")
+            write_datum_to_file(file_name="stochastic_states", datum=stochastic_num_states, extra_dir="barley_results")
+
+        end_of_instance("crisp_states", extra_dir="barley_results")
+        end_of_instance("stochastic_states", extra_dir="barley_results")
+
+    # Plot.
+    chart_utils.CUSTOM_TITLE = "Barley: $\\beta$ vs. $|S_\\phi|$"
+    chart_utils.X_AXIS_LABEL = "$\\beta$"
+    chart_utils.Y_AXIS_LABEL = "$|S_\\phi|$"
+    chart_utils.X_AXIS_START_VAL = x_min
+    chart_utils.X_AXIS_INCREMENT = x_increment
+    chart_utils.Y_AXIS_END_VAL = None
+
+    chart_utils.make_plots("barley_results/", ["crisp_states", "stochastic_states", "demo_states"], cumulative=False, episodic=False, track_disc_reward=False)
+
+
 
 def make_barley_plot_pf(plotting_helper_func, file_name="barley", x_label="$\\beta$", y_label="$|S_\\phi|$"):
     '''
@@ -187,7 +242,8 @@ def _barley_s_phi_size_plot_wrapper(x, param_dict):
     use_crisp_sa = param_dict["use_crisp_sa"]
 
     # Let BARLEY run.
-    pmf_code, coding_distr, abstr_policy = barley(mdp, beta=x, iters=iters, convergence_threshold=convergence_threshold)
+    from barley import run_barley
+    pmf_code, coding_distr, abstr_policy = run_barley(mdp, beta=x, iters=iters, convergence_threshold=convergence_threshold)
 
     # Check size.
     prob_s_phi = ProbStateAbstraction(coding_distr)
@@ -195,6 +251,7 @@ def _barley_s_phi_size_plot_wrapper(x, param_dict):
         phi = convert_prob_sa_to_sa(prob_s_phi)
         s_phi_size = phi.get_num_abstr_states()
     else:
+        from barley import get_sa_size_from_coding_distr
         s_phi_size = get_sa_size_from_coding_distr(coding_distr)
 
     return s_phi_size

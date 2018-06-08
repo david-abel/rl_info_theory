@@ -90,6 +90,7 @@ def make_det_policy_eps_greedy(lambda_policy, ground_states, actions, epsilon=0.
 
     return pmf_policy
 
+
 def make_policy_det_max_policy(policy):
     '''
     Args:
@@ -107,6 +108,7 @@ def make_policy_det_max_policy(policy):
         new_policy[s] = {policy[s].keys()[policy[s].values().index(max(policy[s].values()))]:1.0}
 
     return new_policy
+
 
 # ------------------
 # -- Misc Helpers --
@@ -470,6 +472,7 @@ def run_barley(mdp, demo_policy_lambda, iters=100, beta=20.0, convergence_thresh
 
     return pmf_s_phi, phi_pmf, abstr_policy_pmf
 
+
 # ---------------------
 # -- Main Experiment --
 # ---------------------
@@ -507,6 +510,7 @@ def barley_compare_policies(mdp, demo_policy_lambda, beta=3.0):
     print "\t|S_\\phi|_crisp =", crisp_s_phi.get_num_abstr_states()
     print
 
+
 def barley_visualize_abstr(mdp, beta=2.0):
     '''
     Args:
@@ -514,7 +518,7 @@ def barley_visualize_abstr(mdp, beta=2.0):
         beta (float)
 
     Summary:
-        Visualizes the state abstraction found by barley.
+        Visualizes the state abstraction found by BARLEY using pygame.
     '''
     # Run BARLEY.
     pmf_s_phi, phi_pmf, abstr_policy = run_barley(mdp, iters=100, beta=beta, convergence_threshold=0.00001)
@@ -529,17 +533,19 @@ def main():
 
     # Make MDP.
     grid_dim = 5
-    mdp = FourRoomMDP(width=5, height=5, init_loc=(1, 1), goal_locs=[(5, 5)], gamma=0.95)
+
+    # Upworld.
+    mdp = GridWorldMDP(width=grid_dim*4, height=grid_dim, init_loc=(1, 1), goal_locs=[(i, grid_dim) for i in range(1, grid_dim*4)], gamma=0.95)
 
     # Choose experiment and parameters.
     exp_type = "plot_barley_val"
-    beta_range = list(chart_utils.drange(0.0, 5.0, 0.5))
+    beta_range = list(chart_utils.drange(0.0, 2.0, 0.2))
     instances = 5
 
     # Get demo policy.
     vi = ValueIteration(mdp)
     vi.run_vi()
-    demo_policy = get_lambda_policy(make_det_policy_eps_greedy(vi.policy, vi.get_states(), mdp.get_actions()))
+    demo_policy = get_lambda_policy(make_det_policy_eps_greedy(vi.policy, vi.get_states(), mdp.get_actions(), epsilon=0.2))
 
     if exp_type == "plot_barley_val":
         # Makes a plot comparing beta vs. value of phi-pi_phi combo from BARLEY.

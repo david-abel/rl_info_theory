@@ -1,0 +1,109 @@
+from __future__ import division
+import sys
+import cv2
+import math
+import time
+import torch
+import numpy as np
+
+from PIL import Image
+from torch.autograd import Variable
+from networks import A2C
+
+
+def asMinutes(s):
+    m = math.floor(s / 60)
+    s -= m * 60
+    return '%dm %ds' % (m, s)
+
+
+def timeSince(since, percent):
+    now = time.time()
+    s = now - since
+    es = s / (percent)
+    rs = es - s
+    return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
+
+
+def createVariable(x, use_cuda=False):
+    ret = Variable(torch.from_numpy(x).float().unsqueeze(0))
+    if use_cuda:
+        return ret.cuda()
+    else:
+        return ret
+
+
+def merge_loss_dicts(orig, update):
+    for k in update:
+        orig[k] += update[k]
+    return orig
+
+
+def agent_lookup(params):
+    if params['arch'] == 'A2C':
+        print 'Running A2C...'
+        return A2C(params['state_dim'], params['action_dim'], parallel=params['parallel'])
+    else:
+        print 'Unknown architecture specified!'
+        sys.exit(0)
+
+
+class Preprocessor:
+    def __init__(self, state_shape, history_size, use_luminance=True, resize_shape=None):
+        self.history = history_size
+        self.use_luminance = use_luminance
+        self.resize_shape = resize_shape
+
+        height, width, chans = (84, 84, 4) # state_shape
+
+        if use_luminance:
+            chans = 1
+
+        if self.resize_shape:
+            height, width = self.resize_shape
+        self.queue_state_shape = (chans, height, width)
+        self.state_shape = (chans * self.history, height, width)
+
+        self.frame_queue = []
+        self.np_transpose = lambda x: x.transpose(2, 0, 1)
+        self.resize_img = lambda x: cv2.resize(x, self.resize_shape, interpolation=cv2.INTER_AREA)
+
+        self.reset()
+
+    def compute_luminance(self, img):
+        channels = np.dsplit(img, 3)
+        lum = np.array(0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2])
+        return lum
+
+    def process_state(self, env_state):
+        image = env_state
+        if self.resize_shape:
+            image = self.resize_img(image)
+
+        if self.use_luminance:
+            image = self.compute_luminance(image)
+
+        image = self.np_transpose(image)
+        self.frame_queue.append(image)
+        while len(self.frame_queue) > self.history:
+            self.frame_queue.pop(0)
+
+        return np.vstack(self.frame_queue)
+
+    def get_state(self):
+        return np.vstack(self.frame_queue)
+
+    def reset(self):
+        for _ in range(self.history - 1):
+            self.frame_queue.append(np.zeros(self.queue_state_shape))
+
+    def get_img_state(self):
+        frames = map(lambda x: x.transpose(1, 2, 0), self.frame_queue)
+        border_shape = (84, 10, 1)
+        frames = [val for pair in zip(frames, [np.zeros(border_shape)] * len(frames)) for val in pair]
+        frames = frames[:-1]
+        frames = Image.fromarray(np.hstack(frames)[:, :, -1]).convert('RGB')
+
+        new_size = tuple(np.array(frames.size) * 3)
+        frames = frames.resize(new_size, Image.ANTIALIAS)
+        return frames

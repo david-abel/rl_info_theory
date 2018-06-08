@@ -104,7 +104,7 @@ def print_pmf(pmf, name='p(x)'):
         print "  " + str(name)[:-1] + " = " + str(x) + ") =", round(pmf[x], 3)
     print "----------\n"
 
-def print_coding_distr(coding_distr):
+def print_coding_pmf(coding_distr):
     '''
     Args:
         coding_distr (dict):

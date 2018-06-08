@@ -74,7 +74,7 @@ def init_pmf_code(all_codes):
 
 	return new_pmf_code
 
-def init_coding_distr(all_x, all_codes):
+def init_coding_pmf(all_x, all_codes):
 	'''
 	Args:
 		all_x (list)
@@ -83,13 +83,13 @@ def init_coding_distr(all_x, all_codes):
 	Returns:
 		(float)
 	'''
-	new_coding_distr = defaultdict(lambda : defaultdict(float))
+	new_coding_pmf = defaultdict(lambda : defaultdict(float))
 
 	for x in all_x:
 		for code in all_codes:
-			new_coding_distr[x][code] = 1.0 / len(all_codes)
+			new_coding_pmf[x][code] = 1.0 / len(all_codes)
 
-	return new_coding_distr
+	return new_coding_pmf
 
 # -------------------------------
 # -- Blahut Arimoto Main Steps --
@@ -107,11 +107,11 @@ def _compute_denominator(x, pmf_code, beta):
 	'''
 	return sum([pmf_code[code_hat] * math.exp(- beta * distance(x, code_hat)) for code_hat in pmf_code.keys()])
 
-def compute_prob_of_codes(pmf_x, coding_distr, beta=.01):
+def compute_prob_of_codes(pmf_x, coding_pmf, beta=.01):
 	'''
 	Args:
 		pmf_x (dict):
-		coding_distr (dict)
+		coding_pmf (dict)
 		beta (float)
 
 	Returns:
@@ -119,17 +119,17 @@ def compute_prob_of_codes(pmf_x, coding_distr, beta=.01):
 	'''
 
 	new_pmf_code = defaultdict(float)
-	for code in coding_distr.values()[0].keys():
-		new_pmf_code[code] = sum([pmf_x[x] * coding_distr[x][code] for x in pmf_x.keys()])
+	for code in coding_pmf.values()[0].keys():
+		new_pmf_code[code] = sum([pmf_x[x] * coding_pmf[x][code] for x in pmf_x.keys()])
 
 	return new_pmf_code
 
-def compute_coding_distr(pmf_x, pmf_code, coding_distr, beta=.01):
+def compute_coding_pmf(pmf_x, pmf_code, coding_pmf, beta=.01):
 	'''
 	Args:
 		pmf_x (dict)
 		pmf_code (dict)
-		coding_distr (dict)
+		coding_pmf (dict)
 		beta (float)
 
 	Returns:
@@ -139,16 +139,16 @@ def compute_coding_distr(pmf_x, pmf_code, coding_distr, beta=.01):
 		# Value: dict, where:
 			# Key: code
 			# Value: probability
-	new_coding_distr = defaultdict(lambda : defaultdict(float))
+	new_coding_pmf = defaultdict(lambda : defaultdict(float))
 
 	for x in pmf_x.keys():
 		for code in pmf_code.keys():
 
 			numerator = pmf_code[code] * math.exp(-beta * distance(x, code))
 			denominator = _compute_denominator(x, pmf_code, beta)
-			new_coding_distr[x][code] = float(numerator) / denominator
+			new_coding_pmf[x][code] = float(numerator) / denominator
 
-	return new_coding_distr
+	return new_coding_pmf
 
 def blahut_arimoto(beta, message_len, code_len, iters=90):
 	'''
@@ -173,16 +173,16 @@ def blahut_arimoto(beta, message_len, code_len, iters=90):
 	# Init pmfs.
 	pmf_x = init_pmf_x(all_x)
 	pmf_code = init_pmf_code(all_codes)
-	coding_distr = init_coding_distr(all_x, all_codes)
+	coding_pmf = init_coding_pmf(all_x, all_codes)
 
 	# Blahut.
 	for i in range(iters):
 		# print "Round", i
-		pmf_code = compute_prob_of_codes(pmf_x, coding_distr, beta=beta)
-		coding_distr = compute_coding_distr(pmf_x, pmf_code, coding_distr, beta=beta)
+		pmf_code = compute_prob_of_codes(pmf_x, coding_pmf, beta=beta)
+		coding_pmf = compute_coding_pmf(pmf_x, pmf_code, coding_pmf, beta=beta)
 
 	# Return the two distributions from BA.
-	return pmf_code, coding_distr
+	return pmf_code, coding_pmf
 
 # -----------------------
 # -- PlotFunc Wrappers --
@@ -201,7 +201,7 @@ def _blahut_arimoto_plot_func_wrapper(x, param_dict):
 		This serves as a wrapper to cooperate with PlotFunc.
 	'''
 
-	pmf_code, coding_distr = blahut_arimoto(beta=x, message_len=param_dict["message_len"], code_len=param_dict["code_len"])
+	pmf_code, coding_pmf = blahut_arimoto(beta=x, message_len=param_dict["message_len"], code_len=param_dict["code_len"])
 
 	if "message" not in param_dict.keys() and "code" in param_dict.keys():
 		# Just plotting the code pmf.
@@ -213,7 +213,7 @@ def _blahut_arimoto_plot_func_wrapper(x, param_dict):
 		message = param_dict["message"]
 		code = param_dict["code"]
 
-		return coding_distr[message][code]
+		return coding_pmf[message][code]
 
 def _entropy_of_ba_pmf_wrapper(x, param_dict):
 	'''
@@ -236,13 +236,13 @@ def _entropy_of_ba_conditional_pmf_wrapper(x, param_dict):
 	Returns:
 		(float): Retrieves conditional entropy of Pr(c | m)
 	'''
-	pmf_code, coding_distr = blahut_arimoto(beta=x, message_len=param_dict["message_len"], code_len=param_dict["code_len"])
+	pmf_code, coding_pmf = blahut_arimoto(beta=x, message_len=param_dict["message_len"], code_len=param_dict["code_len"])
 
 	# Make message alphabet: length 2 bit sequences.
 	all_x = ["".join(seq) for seq in itertools.product("01", repeat=param_dict["message_len"])]
 	pmf_x = init_pmf_x(all_x)
 
-	return conditional_entropy(coding_distr, pmf_x)
+	return conditional_entropy(coding_pmf, pmf_x)
 
 def _mutual_info_of_ba_pmf_wrapper(x, param_dict):
 	'''
@@ -253,13 +253,13 @@ def _mutual_info_of_ba_pmf_wrapper(x, param_dict):
 	Returns:
 		(float): Retrieves conditional entropy of Pr(c | m)
 	'''
-	pmf_code, coding_distr = blahut_arimoto(beta=x, message_len=param_dict["message_len"], code_len=param_dict["code_len"])
+	pmf_code, coding_pmf = blahut_arimoto(beta=x, message_len=param_dict["message_len"], code_len=param_dict["code_len"])
 
 	# Make message alphabet: length 2 bit sequences.
 	all_x = ["".join(seq) for seq in itertools.product("01", repeat=param_dict["message_len"])]
 	pmf_x = init_pmf_x(all_x)
 
-	return mutual_info(pmf_code, pmf_x, coding_distr)
+	return mutual_info(pmf_code, pmf_x, coding_pmf)
 
 # --------------
 # -- Plotting --
@@ -313,9 +313,9 @@ def main():
 		make_ba_plot()
 	else:
 		# Just print out the coding distribution.
-		pmf_code, coding_distr = blahut_arimoto(beta=0.0)
+		pmf_code, coding_pmf = blahut_arimoto(beta=0.0)
 		print_pmf(pmf_code)
-		print_coding_distr(coding_distr)
+		print_coding_pmf(coding_pmf)
 		print "beta =", beta
 	
 if __name__ == "__main__":

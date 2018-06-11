@@ -17,7 +17,7 @@ from simple_rl.planning import ValueIteration
 from simple_rl.run_experiments import run_agents_on_mdp, evaluate_agent
 from simple_rl.utils import chart_utils
 from blahut_arimoto import print_coding_pmf, print_pmf, mutual_info
-from plot_barley import make_barley_val_plot, make_barley_num_states_plot
+from plot_barley import make_barley_val_and_size_plots
 from rlit_utils import *
 
 distance_func = kl
@@ -532,14 +532,14 @@ def barley_visualize_abstr(mdp, beta=2.0):
 def main():
 
     # Make MDP.
-    grid_dim = 5
+    grid_dim = 4
 
     # Upworld.
-    mdp = GridWorldMDP(width=grid_dim*4, height=grid_dim, init_loc=(1, 1), goal_locs=[(i, grid_dim) for i in range(1, grid_dim*4)], gamma=0.95)
+    mdp = GridWorldMDP(width=grid_dim, height=grid_dim, init_loc=(1, 1), goal_locs=[(i, grid_dim) for i in range(1, grid_dim*4)], gamma=0.95)
 
     # Choose experiment and parameters.
-    exp_type = "plot_barley_val"
-    beta_range = list(chart_utils.drange(0.0, 2.0, 0.2))
+    exp_type = "plot_barley_val_and_num_states"
+    beta_range = list(chart_utils.drange(0.0, 1.0, 0.2))
     instances = 5
 
     # Get demo policy.
@@ -547,12 +547,9 @@ def main():
     vi.run_vi()
     demo_policy = get_lambda_policy(make_det_policy_eps_greedy(vi.policy, vi.get_states(), mdp.get_actions(), epsilon=0.2))
 
-    if exp_type == "plot_barley_val":
-        # Makes a plot comparing beta vs. value of phi-pi_phi combo from BARLEY.
-        make_barley_val_plot(mdp, demo_policy, beta_range, instances)
-    if exp_type == "plot_barley_num_states":
-        # Makes a plot comparing beta vs. |S_phi| of phi from BARLEY.
-        make_barley_num_states_plot(mdp, demo_policy, beta_range, instances)
+    if exp_type == "plot_barley_val_and_num_states":
+        # Makes the main two plots.
+        make_barley_val_and_size_plots(mdp, demo_policy, beta_range)
     elif exp_type == "compare_policies":
         # Makes a plot comparing value of pi-phi combo from BARLEY with \pi_d.
         barley_compare_policies(mdp, demo_policy, beta=2.0)

@@ -33,8 +33,8 @@ def main():
     print str(envs[0].unwrapped.get_action_meanings())
 
     params = {"arch": agent,
-              "num_epochs": 100000,
-              "learning_rate": 0.01,
+              "num_epochs": 10000000,
+              "learning_rate": 0.001,
               "beta": 100.0,
               "batch_size": 16,
               "state_dim": 4,

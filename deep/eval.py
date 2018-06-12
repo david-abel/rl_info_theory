@@ -167,7 +167,7 @@ def cache_eval_episode(env, params):
             var_state = createVariable(state, use_cuda=params['use_cuda'])
             action, state_val, distro = agent.sample_action_distro(var_state)
             cache_states.append(state)
-            cache_distros.append(distro.numpy())
+            cache_distros.append(distro.cpu().numpy())
 
             reward = 0.0
             for _ in range(1):
@@ -192,4 +192,4 @@ def cache_eval_episode(env, params):
                 .format(episode, agent_steps, episode_reward, sum(episode_rewards[-100:]) / 100)
 
     cache_states, cache_distros = np.array(cache_states), np.array(cache_distros)
-    pickle.dump((cache_states, cache_distros), open('./out/{0}_{1}_episode.pkl'.format(params['arch'], params['env_name']), 'wb'))
+    pickle.dump((cache_states, cache_distros), open('./out/{0}_{1}_episode.pkl'.format(params['arch'], params['env_name']), 'wb'), -1)

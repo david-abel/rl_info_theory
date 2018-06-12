@@ -125,7 +125,7 @@ class VAE(nn.Module):
         conv_flat = conv.view(state.size()[0], -1)
         fc_out = self.fc2(F.relu(self.fc1(conv_flat)))
         # print fc_out.data[0].numpy()
-        c = torch.clamp(torch.sign(fc_out), 0.0).data[0].numpy()
+        c = torch.clamp(torch.sign(fc_out), 0.0).data[0].cpu().numpy()
         return RelaxedOneHotCategorical(self.temperature, logits=fc_out).sample(), c
 
     def repr(self, mu, logvar):

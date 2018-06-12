@@ -45,6 +45,8 @@ def deep_barley(params):
         for batch_id, batch in enumerate(trainloader):
             optimizer.zero_grad()
             batch_states, batch_pols = batch['state'], batch['policy']
+            if params['use_cuda']:
+                batch_pols = batch_pols.cuda()
             if agent.use_concrete:
                 pi_phi, _, phi = agent.forward(createVariable(batch_states, use_cuda=params['use_cuda']))
                 phi, _ = phi

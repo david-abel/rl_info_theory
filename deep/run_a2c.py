@@ -4,7 +4,7 @@ import torch
 import random
 
 from train import train_agent, train_agent_parallel
-from eval import eval_agent_parallel, eval_agent
+from eval import eval_agent_parallel, eval_agent, cache_eval_episode
 
 from atari_wrappers import make_atari, wrap_deepmind
 
@@ -24,8 +24,8 @@ def main():
     # num_envs = 8
     # num_envs = 16
 
-    env_name = 'PongDeterministic-v4'
-    # env_name = 'BreakoutDeterministic-v4'
+    # env_name = 'PongDeterministic-v4'
+    env_name = 'BreakoutDeterministic-v4'
     # env_name = 'SeaquestDeterministic-v4'
     print 'Environment: {0}'.format(env_name)
 
@@ -68,7 +68,9 @@ def main():
 
     print sorted(params.iteritems())
 
-    eval_agent_parallel(envs, params)
+    # eval_agent(envs[0], params)
+    # eval_agent_parallel(envs, params)
+    cache_eval_episode(envs[0], params)
 
 if __name__ == '__main__':
     main()

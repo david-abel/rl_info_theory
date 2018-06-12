@@ -187,6 +187,56 @@ def train_step_parallel_a2c(agent, optimizer, params):
         return {}
 
 
+def train_step_parallel_vae(agent, optimizer, params):
+    policy_loss = []
+    value_loss = []
+    total = 0
+
+    for i in range(params['num_envs']):
+        if len(agent.rewards[i]) < 2:
+            continue
+
+        R = agent.rewards[i][-1]
+        rewards = []
+        for r in agent.rewards[i][::-1][1:]:
+            R = r + params['gamma'] * R
+            rewards.insert(0, R)
+
+        A = 0.0
+        advantages = []
+        for d in agent.deltas[i][::-1]:
+            A = d + (params['gamma'] * params['lambda']) * A
+            advantages.insert(0, A)
+
+        rewards = torch.Tensor(rewards)
+        advantages = torch.Tensor(advantages)
+
+        for (log_prob, value, distro), reward, advantage in zip(agent.saved[i], rewards, advantages):
+            rv_diff = reward - value
+            # policy_loss.append((-log_prob * advantage) - entropy)
+            policy_loss.append((-log_prob * (reward - value.data[0][0])) - entropy)
+            # policy_loss.append((-log_prob * (reward - value.data[0][0])))
+            value_loss.append(torch.mul(rv_diff, rv_diff))
+            total += 1
+
+    agent.rewards.clear()
+    agent.saved.clear()
+    agent.deltas.clear()
+
+    if len(policy_loss) > 0 and len(value_loss) > 0:
+        optimizer.zero_grad()
+        policy_loss = torch.stack(policy_loss).sum() / total
+        value_loss = torch.stack(value_loss).sum() / total
+        loss = policy_loss + 0.5 * value_loss
+        loss.backward()
+        torch.nn.utils.clip_grad_norm(agent.parameters(), 40)
+        optimizer.step()
+
+        return {'PL': policy_loss.data[0], 'VL': value_loss.data[0]}
+    else:
+        return {}
+
+
 def train_agent_parallel(envs, params):
     preprocessors = []
     for _ in range(params['num_envs']):
@@ -200,7 +250,7 @@ def train_agent_parallel(envs, params):
 
     agent = agent_lookup(params)
 
-    if params['arch'] in ['A2C', 'SVQ-A2C']:
+    if params['arch'] in ['A2C']:
         optimizer = torch.optim.RMSprop(agent.parameters(), lr=params['learning_rate'])
     else:
         optimizer = torch.optim.Adam(agent.parameters(), lr=params['learning_rate'])
@@ -272,12 +322,6 @@ def train_agent_parallel(envs, params):
                 loss_dict = merge_loss_dicts(loss_dict, l_dict)
                 num_updates += 1
 
-        if params['arch'] not in ['A2C']:
-            if not agent.initialized:
-                if len(agent.encs) >= params['disc_supps']:
-                    agent.init_vq_embeds()
-                    # pass
-
         for i, env in enumerate(envs):
             agent.rewards[i].append(0.0)
 
@@ -290,22 +334,8 @@ def train_agent_parallel(envs, params):
 
         episode_rewards.extend(episode_reward)
 
-        if params['arch'] in ['VQ-A2C']:
-            if params['num_envs'] == 1:
-                visit = (len(agent.visited[0]), sorted(agent.visited[0]))
-            else:
-                visit = [len(agent.visited[i]) for i in range(params['num_envs'])]
-            for i in range(params['num_envs']):
-                agent.visited[i] = set([])
-        elif params['arch'] in ['DVQ-A2C', 'SVQ-A2C']:
-            if params['num_envs'] == 1:
-                visit = list(np.mean(np.array(agent.visited[0]), axis=0)), len(set([str(list(x)) for x in agent.visited[0]]))
-            else:
-                visit = [np.mean(np.array(agent.visited[i])) for i in range(params['num_envs'])]
-            for i in range(params['num_envs']):
-                agent.visited[i] = []
-        else:
-            visit = 0
+        # Might need this later
+        visit = 0
 
         total_steps += t
         if episode % params['print_every'] == 0:
@@ -316,7 +346,3 @@ def train_agent_parallel(envs, params):
 
         if episode % params['save_every'] == 0:
             torch.save(agent.state_dict(), './agents/{0}_{1}'.format(params['arch'], params['env_name']))
-
-
-
-

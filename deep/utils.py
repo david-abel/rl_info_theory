@@ -5,9 +5,12 @@ import math
 import time
 import torch
 import numpy as np
+import cPickle as pickle
 
 from PIL import Image
 from torch.autograd import Variable
+from torch.utils.data import Dataset
+
 from networks import A2C
 
 
@@ -26,7 +29,10 @@ def timeSince(since, percent):
 
 
 def createVariable(x, use_cuda=False):
-    ret = Variable(torch.from_numpy(x).float().unsqueeze(0))
+    if len(x.shape) == 3:
+        ret = Variable(torch.from_numpy(x).float().unsqueeze(0))
+    else:
+        ret = Variable(x.float())
     if use_cuda:
         return ret.cuda()
     else:
@@ -107,3 +113,18 @@ class Preprocessor:
         new_size = tuple(np.array(frames.size) * 3)
         frames = frames.resize(new_size, Image.ANTIALIAS)
         return frames
+
+
+class EpisodeDataset(Dataset):
+    def __init__(self, pkl_path):
+        self.pkl_path = pkl_path
+        with open(self.pkl_path, 'rb') as pkl_f:
+            self.states, self.distros = pickle.load(pkl_f)
+
+        assert self.states.shape[0] == self.distros.shape[0]
+
+    def __len__(self):
+        return self.states.shape[0]
+
+    def __getitem__(self, idx):
+        return {"state": self.states[idx], "policy": self.distros[idx]}

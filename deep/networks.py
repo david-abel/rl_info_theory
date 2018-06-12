@@ -99,8 +99,13 @@ class VAE(nn.Module):
         self.fc_std = nn.Linear(512, self.rep_size)
         self.fc2 = nn.Linear(512, self.rep_size)
 
-        self.p_fc = nn.Linear(self.rep_size, self.action_dim)
-        self.v_fc = nn.Linear(self.rep_size, 1)
+        self.fc3 = nn.Linear(self.rep_size, 256)
+        self.fc4 = nn.Linear(self.rep_size, 256)
+        self.p_fc = nn.Linear(256, self.action_dim)
+        self.v_fc = nn.Linear(256, 1)
+
+        # self.p_fc = nn.Linear(self.rep_size, self.action_dim)
+        # self.v_fc = nn.Linear(self.rep_size, 1)
 
         self.training = True
         self.use_concrete = True
@@ -145,8 +150,8 @@ class VAE(nn.Module):
         else:
             mu, logvar = self.encode(state)
             z = self.repr(mu, logvar)
-        action_scores = self.p_fc(z)
-        state_value = self.v_fc(z)
+        # action_scores, state_value = self.p_fc(z), self.v_fc(z)
+        action_scores, state_value = self.p_fc(F.relu(self.fc3(z))), self.v_fc(F.relu(self.fc4(z)))
         ret = (z, c) if self.use_concrete else (mu, logvar)
         return F.softmax(action_scores, dim=1), state_value, ret
 
@@ -173,8 +178,8 @@ class VAE(nn.Module):
         m = Categorical(probs)
         action = m.sample()
         # action = probs.max(1)[1]
-        # return action.data[0], val.data[0], ''.join(map(str, map(int, list(c))))
-        return action.data[0], val.data[0], int(z.max(1)[1])
+        return action.data[0], val.data[0], ''.join(map(str, map(int, list(c))))
+        # return action.data[0], val.data[0], int(z.max(1)[1])
 
     def flip_training(self):
         self.training = not self.training

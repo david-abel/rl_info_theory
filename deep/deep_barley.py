@@ -52,7 +52,8 @@ def deep_barley(params):
                 phi, _ = phi
                 loss, r_loss, p_loss = loss_concrete(batch_pols, pi_phi, phi, params)
             else:
-                pi_phi, _, mus, logvars = agent.forward(createVariable(batch_states, use_cuda=params['use_cuda']))
+                pi_phi, _, rets = agent.forward(createVariable(batch_states, use_cuda=params['use_cuda']))
+		mus, logvars = rets
                 loss, r_loss, p_loss = loss_gauss(batch_pols, pi_phi, mus, logvars, params)
             loss.backward()
             total_loss += loss.data

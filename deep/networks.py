@@ -88,8 +88,9 @@ class VAE(nn.Module):
         super(VAE, self).__init__()
         self.state_dim = state_dim
         self.action_dim = action_dim
-        self.rep_size = 50
-        self.temperature = 0.75
+        self.rep_size = 25
+	self.hidden_size = 100
+        self.temperature = 0.25
 
         self.c1 = nn.Conv2d(4, 32, kernel_size=8, stride=4, padding=1)
         self.c2 = nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=2)
@@ -99,16 +100,17 @@ class VAE(nn.Module):
         self.fc_std = nn.Linear(512, self.rep_size)
         self.fc2 = nn.Linear(512, self.rep_size)
 
-        self.fc3 = nn.Linear(self.rep_size, 256)
-        self.fc4 = nn.Linear(self.rep_size, 256)
-        self.p_fc = nn.Linear(256, self.action_dim)
-        self.v_fc = nn.Linear(256, 1)
+        self.fc3 = nn.Linear(self.rep_size, self.hidden_size)
+        self.fc4 = nn.Linear(self.hidden_size, self.hidden_size)
+        self.p_fc = nn.Linear(self.hidden_size, self.action_dim)
+        self.v_fc = nn.Linear(self.hidden_size, 1)
 
         # self.p_fc = nn.Linear(self.rep_size, self.action_dim)
         # self.v_fc = nn.Linear(self.rep_size, 1)
 
         self.training = True
-        self.use_concrete = True
+        # self.use_concrete = True
+	self.use_concrete = False
 
         if parallel:
             self.saved = defaultdict(list)
@@ -145,13 +147,13 @@ class VAE(nn.Module):
         if self.use_concrete:
             z, c = self.concrete(state)
             # print z, z.max(1)[1]
-            if not self.training:
-                print ''.join(map(str, map(int, list(c)))), int(z.max(1)[1])
+            # if not self.training:
+                # print ''.join(map(str, map(int, list(c)))), int(z.max(1)[1])
         else:
             mu, logvar = self.encode(state)
             z = self.repr(mu, logvar)
         # action_scores, state_value = self.p_fc(z), self.v_fc(z)
-        action_scores, state_value = self.p_fc(F.relu(self.fc3(z))), self.v_fc(F.relu(self.fc4(z)))
+        action_scores, state_value = self.p_fc(F.relu(self.fc4(F.relu(self.fc3(z))))), torch.tensor([0.0])
         ret = (z, c) if self.use_concrete else (mu, logvar)
         return F.softmax(action_scores, dim=1), state_value, ret
 
@@ -167,6 +169,11 @@ class VAE(nn.Module):
 
     def sample_action_eval(self, state):
         probs, val, _ = self.forward(state)
+	# print probs
+	t = 75.
+	# s = torch.exp(probs * t) / torch.sum(torch.exp(probs * t))
+	# print s
+	# probs = s
         m = Categorical(probs)
         action = m.sample()
         # action = probs.max(1)[1]
@@ -183,3 +190,4 @@ class VAE(nn.Module):
 
     def flip_training(self):
         self.training = not self.training
+

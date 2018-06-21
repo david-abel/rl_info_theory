@@ -53,14 +53,14 @@ def deep_barley(params):
                 loss, r_loss, p_loss = loss_concrete(batch_pols, pi_phi, phi, params)
             else:
                 pi_phi, _, rets = agent.forward(createVariable(batch_states, use_cuda=params['use_cuda']))
-		mus, logvars = rets
+                mus, logvars = rets
                 loss, r_loss, p_loss = loss_gauss(batch_pols, pi_phi, mus, logvars, params)
             loss.backward()
             total_loss += loss.data
             optimizer.step()
 
             if (batch_id + 1) % params['print_every'] == 0:
-                print '\tBatch {} | Total Loss: {:.6f} | R-Loss {:.6f} | P-Loss {:.6f} | \t[{}/{} ({:.0f}%)]'\
+                print '\tBatch {} | Total Loss: {:.6f} | R-Loss {:.6f} | P-Loss {:.6f} | \t[{}/{} ({:.0f}%)]' \
                     .format(batch_id + 1, loss.data, r_loss.data, p_loss.data, batch_id * len(batch_states),
                             len(trainloader.dataset), 100. * batch_id / len(trainloader))
         print 'Epoch {} | Total Loss {:.6f}'.format(epoch + 1, total_loss)
@@ -81,7 +81,8 @@ def eval_db_agent(env, params):
         agent = agent.cuda()
         agent.load_state_dict(torch.load('./agents/{0}_{1}'.format(params['arch'], params['env_name'])))
     else:
-        agent.load_state_dict(torch.load('./agents/{0}_{1}'.format(params['arch'], params['env_name']), map_location='cpu'))
+        agent.load_state_dict(
+            torch.load('./agents/{0}_{1}'.format(params['arch'], params['env_name']), map_location='cpu'))
     agent.eval()
 
     agent_steps = 0
@@ -121,8 +122,8 @@ def eval_db_agent(env, params):
             preprocessor.reset()
 
         print 'Episode {0} | Total Steps {1} | Total Reward {2} | Mean Reward {3} | Total Time {4}' \
-                .format(episode, agent_steps, episode_reward, sum(episode_rewards[-100:]) / 100,
-                        timeSince(start, episode / params['num_episodes']))
+            .format(episode, agent_steps, episode_reward, sum(episode_rewards[-100:]) / 100,
+                    timeSince(start, episode / params['num_episodes']))
 
 
 def cache_abstraction(env, params):
@@ -141,7 +142,8 @@ def cache_abstraction(env, params):
         agent = agent.cuda()
         agent.load_state_dict(torch.load('./agents/{0}_{1}'.format(params['arch'], params['env_name'])))
     else:
-        agent.load_state_dict(torch.load('./agents/{0}_{1}'.format(params['arch'], params['env_name']), map_location='cpu'))
+        agent.load_state_dict(
+            torch.load('./agents/{0}_{1}'.format(params['arch'], params['env_name']), map_location='cpu'))
     agent.eval()
 
     agent_steps = 0
@@ -186,4 +188,4 @@ def cache_abstraction(env, params):
             preprocessor.reset()
 
         print 'Episode {0} | Total Steps {1} | Total Reward {2} | Mean Reward {3}' \
-                .format(episode, agent_steps, episode_reward, sum(episode_rewards[-100:]) / 100)
+            .format(episode, agent_steps, episode_reward, sum(episode_rewards[-100:]) / 100)

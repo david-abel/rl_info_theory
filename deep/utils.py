@@ -11,7 +11,7 @@ from PIL import Image
 from torch.autograd import Variable
 from torch.utils.data import Dataset
 
-from networks import A2C
+from networks import A2C, VAEAgent
 
 
 def asMinutes(s):
@@ -49,6 +49,17 @@ def agent_lookup(params):
     if params['arch'] == 'A2C':
         print 'Running A2C...'
         return A2C(params['state_dim'], params['action_dim'], parallel=params['parallel'])
+    if params['arch'] == 'DBAgent':
+        print 'Running episodic DB'
+        agent = A2C(params['state_dim'], params['action_dim'])
+        if params['use_cuda']:
+            agent = agent.cuda()
+            agent.load_state_dict(torch.load('./agents/A2C_{0}'.format(params['env_name'])))
+        else:
+            agent.load_state_dict(torch.load('./agents/A2C_{0}'.format(params['env_name']),
+                                             map_location='cpu'))
+        agent.eval()
+        return VAEAgent(agent, params['state_dim'], params['action_dim'])
     else:
         print 'Unknown architecture specified!'
         sys.exit(0)

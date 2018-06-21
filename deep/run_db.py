@@ -3,6 +3,7 @@ import gym
 import torch
 import random
 
+from train import train_agent_parallel
 from deep_barley import deep_barley, eval_db_agent, cache_abstraction
 
 from atari_wrappers import make_atari
@@ -15,7 +16,8 @@ torch.manual_seed(SEED) if not use_cuda else torch.cuda.manual_seed(SEED)
 
 
 def main():
-    agent = 'BARLEY'
+    # agent = 'BARLEY'
+    agent = 'DBAgent'
 
     # env_name = 'PongDeterministic-v4'
     env_name = 'BreakoutDeterministic-v4'
@@ -40,7 +42,8 @@ def main():
               "state_dim": 4,
               "action_dim": envs[0].action_space.n,
               "use_cuda": use_cuda,
-              'print_every': 20,
+              # 'print_every': 20,
+              'print_every': 1,
               'save_every': 10,
               'env_name': env_name,
               'num_episodes': 100,
@@ -50,13 +53,18 @@ def main():
               "resize_shape": (84, 84),
               "history": 4,
               "use_luminance": True,
+              "optim": 'adam',
+              "update_freq": 16,
+              "num_envs": 1,
+              "gamma": 0.99
               }
 
     print sorted(params.iteritems())
 
-    deep_barley(params)
+    # deep_barley(params)
     # eval_db_agent(envs[0], params)
     # cache_abstraction(envs[0], params)
+    train_agent_parallel(envs, params)
 
 if __name__ == '__main__':
     main()

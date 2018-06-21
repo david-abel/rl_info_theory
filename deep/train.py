@@ -2,6 +2,7 @@ from __future__ import division
 import sys
 import time
 import torch
+import random
 import numpy as np
 from collections import defaultdict
 
@@ -50,6 +51,8 @@ def train_step_parallel(agent, optimizer, params):
     if 'A2C' == params['arch']:
         # print 'Running A2C update'
         return train_step_parallel_a2c(agent, optimizer, params)
+    if 'DBAgent' == params['arch']:
+        return train_step_parallel_vae(agent, optimizer, params)
     else:
         print 'Unknown training scheme specified!'
         sys.exit(0)
@@ -64,9 +67,15 @@ def train_agent(env, params):
         preprocessor = None
 
     agent = agent_lookup(params)
+    agent.train()
 
-    # optimizer = torch.optim.RMSprop(agent.parameters(), lr=params['learning_rate'])
-    optimizer = torch.optim.Adam(agent.parameters(), lr=params['learning_rate'])
+    if params['optim'] == 'rms':
+        optimizer = torch.optim.RMSprop(agent.parameters(), lr=params['learning_rate'])
+    elif params['optim'] == 'adam':
+        optimizer = torch.optim.Adam(agent.parameters(), lr=params['learning_rate'])
+    else:
+        print 'Unknown optimizer specified!'
+        sys.exit(0)
 
     if params['use_cuda']:
         agent = agent.cuda()
@@ -187,52 +196,54 @@ def train_step_parallel_a2c(agent, optimizer, params):
         return {}
 
 
+def loss_gauss(pi_d, pi_phi, mu, logvar, params):
+    kld = torch.nn.KLDivLoss(size_average=False)
+    recon_loss = kld(torch.log(pi_phi), pi_d) / params['batch_size']
+    prior_loss = -0.5 * torch.mean(torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1))
+    loss = (params['beta'] * recon_loss) + prior_loss
+    return loss, recon_loss, prior_loss
+
+
+def loss_gauss_indiv(pi_d, pi_phi, mu, logvar):
+    kld = torch.nn.KLDivLoss(size_average=False)
+    recon_loss = kld(torch.log(pi_phi), pi_d)
+    prior_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1)
+    return recon_loss, prior_loss
+
+
 def train_step_parallel_vae(agent, optimizer, params):
-    policy_loss = []
-    value_loss = []
+    recon_loss = []
+    prior_loss = []
     total = 0
 
     for i in range(params['num_envs']):
-        if len(agent.rewards[i]) < 2:
+        if len(agent.saved[i]) < params['batch_size']:
             continue
 
-        R = agent.rewards[i][-1]
-        rewards = []
-        for r in agent.rewards[i][::-1][1:]:
-            R = r + params['gamma'] * R
-            rewards.insert(0, R)
-
-        A = 0.0
-        advantages = []
-        for d in agent.deltas[i][::-1]:
-            A = d + (params['gamma'] * params['lambda']) * A
-            advantages.insert(0, A)
-
-        rewards = torch.Tensor(rewards)
-        advantages = torch.Tensor(advantages)
-
-        for (log_prob, value, distro), reward, advantage in zip(agent.saved[i], rewards, advantages):
-            rv_diff = reward - value
-            # policy_loss.append((-log_prob * advantage) - entropy)
-            policy_loss.append((-log_prob * (reward - value.data[0][0])) - entropy)
-            # policy_loss.append((-log_prob * (reward - value.data[0][0])))
-            value_loss.append(torch.mul(rv_diff, rv_diff))
+        for (log_prob, ret, pi_phi, pi_d) in agent.saved[i]:
+            # entropy = 0.01 * -torch.mul(pi_phi, torch.log(pi_phi)).sum()
+            mu, logvar = ret
+            r_loss, p_loss = loss_gauss_indiv(pi_d, pi_phi, mu, logvar)
+            # print r_loss, p_loss
+            recon_loss.append(r_loss)
+            # recon_loss.append(r_loss - entropy)
+            prior_loss.append(p_loss)
             total += 1
 
-    agent.rewards.clear()
-    agent.saved.clear()
-    agent.deltas.clear()
-
-    if len(policy_loss) > 0 and len(value_loss) > 0:
+        agent.rewards.clear()
+        agent.deltas.clear()
+        agent.saved.clear()
+    if len(recon_loss) > 0 and len(prior_loss) > 0:
         optimizer.zero_grad()
-        policy_loss = torch.stack(policy_loss).sum() / total
-        value_loss = torch.stack(value_loss).sum() / total
-        loss = policy_loss + 0.5 * value_loss
-        loss.backward()
-        torch.nn.utils.clip_grad_norm(agent.parameters(), 40)
+        recon_loss = torch.stack(recon_loss).sum() / total
+        prior_loss = torch.stack(prior_loss).sum() / total
+        loss = (params['beta'] * recon_loss) + prior_loss
+        # loss.backward(retain_graph=True)
+        loss.backward(retain_graph=False)
         optimizer.step()
-
-        return {'PL': policy_loss.data[0], 'VL': value_loss.data[0]}
+        optimizer.zero_grad()
+        print loss.data.item(), recon_loss.data.item(), prior_loss.data.item()
+        return {'RL': recon_loss.data, 'PL': prior_loss.data}
     else:
         return {}
 
@@ -249,11 +260,15 @@ def train_agent_parallel(envs, params):
         preprocessors.append(preprocessor)
 
     agent = agent_lookup(params)
+    agent.train()
 
-    if params['arch'] in ['A2C']:
+    if params['optim'] == 'rms':
         optimizer = torch.optim.RMSprop(agent.parameters(), lr=params['learning_rate'])
-    else:
+    elif params['optim'] == 'adam':
         optimizer = torch.optim.Adam(agent.parameters(), lr=params['learning_rate'])
+    else:
+        print 'Unknown optimizer specified!'
+        sys.exit(0)
 
     if params['use_cuda']:
         agent = agent.cuda()
@@ -294,7 +309,7 @@ def train_agent_parallel(envs, params):
                         break
 
                 agent.rewards[i].append(np.sign(reward))
-                agent.deltas[i].append(np.sign(reward) - state_val[0])
+                # agent.deltas[i].append(np.sign(reward) - state_val[0])
                 episode_reward[i] += reward
 
                 if len(agent.deltas[i]) > 1:
@@ -305,18 +320,18 @@ def train_agent_parallel(envs, params):
                 states[i] = preprocessors[i].process_state(env_states[i]) if preprocessors[i] else env_states[i]
 
             if t % params['update_freq'] == 0:
-                for i, env in enumerate(envs):
-                    if len(agent.rewards[i]) < 1:
-                        continue
+                # for i, env in enumerate(envs):
+                #     if len(agent.rewards[i]) < 1:
+                #         continue
 
-                    var_state = createVariable(states[i], use_cuda=params['use_cuda'])
-                    next_state_val = agent.get_state_val(var_state).data[0][0]
-                    agent.deltas[i][-1] += params['gamma'] * next_state_val
+                    # var_state = createVariable(states[i], use_cuda=params['use_cuda'])
+                    # next_state_val = agent.get_state_val(var_state).data[0][0]
+                    # agent.deltas[i][-1] += params['gamma'] * next_state_val
 
-                    if env_status[i]:
-                        agent.rewards[i].append(0.0)
-                    else:
-                        agent.rewards[i].append(next_state_val)
+                    # if env_status[i]:
+                    #     agent.rewards[i].append(0.0)
+                    # else:
+                    #     agent.rewards[i].append(next_state_val)
 
                 l_dict = train_step_parallel(agent, optimizer, params)
                 loss_dict = merge_loss_dicts(loss_dict, l_dict)

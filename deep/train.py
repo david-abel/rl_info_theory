@@ -235,6 +235,8 @@ def train_step_parallel_vae(agent, optimizer, params):
         agent.saved.clear()
     if len(recon_loss) > 0 and len(prior_loss) > 0:
         optimizer.zero_grad()
+        recon_loss[recon_loss == float('inf')] = 0.0
+        prior_loss[prior_loss == float('inf')] = 0.0
         recon_loss = torch.stack(recon_loss).sum() / total
         prior_loss = torch.stack(prior_loss).sum() / total
         loss = (params['beta'] * recon_loss) + prior_loss
@@ -243,7 +245,7 @@ def train_step_parallel_vae(agent, optimizer, params):
         optimizer.step()
         optimizer.zero_grad()
         print loss.data.item(), recon_loss.data.item(), prior_loss.data.item()
-        return {'RL': recon_loss.data, 'PL': prior_loss.data}
+        return {'RL': recon_loss.data.item(), 'PL': prior_loss.data.item()}
     else:
         return {}
 

@@ -276,12 +276,15 @@ class VAEAgent(nn.Module):
         return action.data[0], val.data[0]
 
     def sample_action_eval(self, state):
-        probs, val, _ = self.forward(state)
+        probs, val, ret, demo = self.forward(state)
         # print probs
-        t = 75.
-        # s = torch.exp(probs * t) / torch.sum(torch.exp(probs * t))
-        # print s
-        # probs = s
+        soft = True
+        # soft = False
+        if soft:
+            t = 75.
+            s = torch.exp(probs * t) / torch.sum(torch.exp(probs * t))
+            # print s
+            probs = s
         m = Categorical(probs)
         action = m.sample()
         # action = probs.max(1)[1]

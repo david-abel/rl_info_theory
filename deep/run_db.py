@@ -3,6 +3,7 @@ import gym
 import torch
 import random
 
+from eval import eval_agent_parallel
 from train import train_agent_parallel
 from deep_barley import deep_barley, eval_db_agent, cache_abstraction
 
@@ -46,7 +47,7 @@ def main():
               'print_every': 1,
               'save_every': 10,
               'env_name': env_name,
-              'num_episodes': 100,
+              'num_episodes': 100000000,
               'max_steps': 100000,
               'env_render': not use_cuda,
               "use_preproc": True,
@@ -65,6 +66,7 @@ def main():
     # eval_db_agent(envs[0], params)
     # cache_abstraction(envs[0], params)
     train_agent_parallel(envs, params)
+    # eval_agent_parallel(envs, params)
 
 if __name__ == '__main__':
     main()

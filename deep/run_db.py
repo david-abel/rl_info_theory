@@ -2,6 +2,7 @@ import sys
 import gym
 import torch
 import random
+import argparse
 
 from eval import eval_agent_parallel
 from train import train_agent_parallel
@@ -16,9 +17,25 @@ random.seed(SEED)
 torch.manual_seed(SEED) if not use_cuda else torch.cuda.manual_seed(SEED)
 
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-mode", type=str, help="Choose between train, trainr, eval")
+    parser.add_argument("-agent", type=str, help="Choose DBAgent or DBAgentAE")
+    parser.add_argument("--restore", type=str, help="Provide path to saved model for trainr or eval modes")
+    args = parser.parse_args()
+    print 'CLI args: {0}'.format(args)
+
+    return args.agent, args.mode, args.restore
+
+
 def main():
+    agent, mode, restore = parse_args()
+
+    assert mode is not None and agent is not None
+
     # agent = 'BARLEY'
-    agent = 'DBAgent'
+    # agent = 'DBAgent'
+    # agent = 'DBAgentAE'
 
     # env_name = 'PongDeterministic-v4'
     env_name = 'BreakoutDeterministic-v4'
@@ -29,25 +46,19 @@ def main():
     for i, env in enumerate(envs):
         env.seed(SEED + i)
 
-    state_dim = envs[0].observation_space.shape
-    state_dim = state_dim[0] if len(state_dim) == 1 else state_dim
-    # print state_dim
-
     print str(envs[0].unwrapped.get_action_meanings())
 
     params = {"arch": agent,
-              "num_epochs": 10000000,
               "learning_rate": 0.001,
               "beta": 100.0,
               "batch_size": 16,
               "state_dim": 4,
               "action_dim": envs[0].action_space.n,
               "use_cuda": use_cuda,
-              # 'print_every': 20,
               'print_every': 1,
               'save_every': 10,
               'env_name': env_name,
-              'num_episodes': 100000000,
+              'num_episodes': 1500,
               'max_steps': 100000,
               'env_render': not use_cuda,
               "use_preproc": True,
@@ -57,7 +68,8 @@ def main():
               "optim": 'adam',
               "update_freq": 16,
               "num_envs": 1,
-              "gamma": 0.99
+              "gamma": 0.99,
+              "restore": None
               }
 
     print sorted(params.iteritems())
@@ -65,8 +77,18 @@ def main():
     # deep_barley(params)
     # eval_db_agent(envs[0], params)
     # cache_abstraction(envs[0], params)
-    train_agent_parallel(envs, params)
-    # eval_agent_parallel(envs, params)
+
+    if mode == 'train':
+        train_agent_parallel(envs, params)
+    elif mode == 'trainr':
+        params['restore'] = restore
+        train_agent_parallel(envs, params)
+    elif mode == 'eval':
+        params['restore'] = restore
+        eval_agent_parallel(envs, params)
+    else:
+        print 'Unknown mode specified!'
+        sys.exit(0)
 
 if __name__ == '__main__':
     main()

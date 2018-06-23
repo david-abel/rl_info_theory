@@ -245,8 +245,8 @@ def train_step_parallel_vae(agent, optimizer, params):
         loss = (params['beta'] * recon_loss) + prior_loss
         # loss.backward(retain_graph=True)
         loss.backward(retain_graph=False)
+	torch.nn.utils.clip_grad_norm_(agent.parameters(), 40.)
         optimizer.step()
-        optimizer.zero_grad()
         print loss.data.item(), recon_loss.data.item(), prior_loss.data.item()
         return {'RL': recon_loss.data.item(), 'PL': prior_loss.data.item()}
     else:

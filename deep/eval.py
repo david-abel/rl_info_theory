@@ -80,6 +80,8 @@ def eval_agent_parallel(envs, params):
     agent = agent_lookup(params)
 
     restore_model(agent, params['restore'], params['use_cuda'])
+    if params['use_cuda']:
+        agent.cuda()
 
     agent.eval()
 

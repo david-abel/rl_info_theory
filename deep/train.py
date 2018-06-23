@@ -222,7 +222,7 @@ def train_step_parallel_vae(agent, optimizer, params):
         if len(agent.saved[i]) < params['batch_size']:
             continue
 
-        for (log_prob, ret, pi_phi, pi_d) in agent.saved[i]:
+        for (log_prob, ret, pi_phi, pi_d, _) in agent.saved[i]:
             # entropy = 0.01 * -torch.mul(pi_phi, torch.log(pi_phi)).sum()
             mu, logvar = ret
             r_loss, p_loss = loss_gauss_indiv(pi_d, pi_phi, mu, logvar)
@@ -308,11 +308,11 @@ def train_agent_parallel(envs, params):
         print 'Unknown optimizer specified!'
         sys.exit(0)
 
-    if params['use_cuda']:
-        agent = agent.cuda()
-
     if params['restore'] is not None:
         restore_model(agent, params['restore'], params['use_cuda'])
+
+    if params['use_cuda']:
+        agent = agent.cuda()
 
     agent.train()
 

@@ -5,7 +5,7 @@ import torch
 import numpy as np
 import cPickle as pickle
 
-from utils import Preprocessor, createVariable, timeSince, agent_lookup
+from utils import Preprocessor, createVariable, timeSince, agent_lookup, restore_model
 
 
 def eval_agent(env, params):
@@ -79,11 +79,9 @@ def eval_agent_parallel(envs, params):
 
     agent = agent_lookup(params)
 
-    if params['use_cuda']:
-        agent = agent.cuda()
-        agent.load_state_dict(torch.load('./agents/{0}_{1}'.format(params['arch'], params['env_name'])))
-    else:
-        agent.load_state_dict(torch.load('./agents/{0}_{1}'.format(params['arch'], params['env_name']), map_location='cpu'))
+    restore_model(agent, params['restore'], params['use_cuda'])
+
+    agent.eval()
 
     episode_rewards = []
     start = time.time()

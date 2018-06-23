@@ -45,12 +45,34 @@ def merge_loss_dicts(orig, update):
     return orig
 
 
+def restore_model(model, restore, use_cuda):
+    try:
+        if use_cuda:
+            model.load_state_dict(torch.load(restore))
+        else:
+            model.load_state_dict(torch.load(restore, map_location='cpu'))
+    except RuntimeError:  # If full reload doesn't work, attempt partial reload
+        full_state = model.state_dict()
+        if use_cuda:
+            full_state.update(torch.load(restore))
+        else:
+            full_state.update(torch.load(restore, map_location='cpu'))
+        model.load_state_dict(full_state)
+
+
 def agent_lookup(params):
+    archs = ['A2C', 'DBAgent', 'DBAgentAE']
+    assert params['arch'] in archs
+
     if params['arch'] == 'A2C':
         print 'Running A2C...'
         return A2C(params['state_dim'], params['action_dim'], parallel=params['parallel'])
-    if params['arch'] == 'DBAgent':
-        print 'Running episodic DB'
+    if 'DBAgent' in params['arch']:
+        if 'DBAgent' == params['arch']:
+            print 'Running episodic DB'
+        elif 'DBAgentAE' == params['arch']:
+            print 'Training AE for pre-trained DB agent'
+
         agent = A2C(params['state_dim'], params['action_dim'])
         if params['use_cuda']:
             agent = agent.cuda()

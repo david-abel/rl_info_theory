@@ -6,7 +6,7 @@ import random
 import numpy as np
 from collections import defaultdict
 
-from utils import Preprocessor, createVariable, timeSince, merge_loss_dicts, agent_lookup
+from utils import Preprocessor, createVariable, timeSince, merge_loss_dicts, agent_lookup, restore_model
 
 
 def train_step_a2c(agent, optimizer, params):
@@ -51,8 +51,10 @@ def train_step_parallel(agent, optimizer, params):
     if 'A2C' == params['arch']:
         # print 'Running A2C update'
         return train_step_parallel_a2c(agent, optimizer, params)
-    if 'DBAgent' == params['arch']:
+    elif 'DBAgent' == params['arch']:
         return train_step_parallel_vae(agent, optimizer, params)
+    elif 'DBAgentAE' == params['arch']:
+        return train_step_parallel_decode(agent, optimizer, params)
     else:
         print 'Unknown training scheme specified!'
         sys.exit(0)
@@ -245,10 +247,42 @@ def train_step_parallel_vae(agent, optimizer, params):
         loss = (params['beta'] * recon_loss) + prior_loss
         # loss.backward(retain_graph=True)
         loss.backward(retain_graph=False)
-	torch.nn.utils.clip_grad_norm_(agent.parameters(), 40.)
+        torch.nn.utils.clip_grad_norm_(agent.parameters(), 40.)
         optimizer.step()
         print loss.data.item(), recon_loss.data.item(), prior_loss.data.item()
         return {'RL': recon_loss.data.item(), 'PL': prior_loss.data.item()}
+    else:
+        return {}
+
+
+def train_step_parallel_decode(agent, optimizer, params):
+    recon_loss = []
+    total = 0
+    mse = torch.nn.MSELoss(size_average=False)
+
+    for i in range(params['num_envs']):
+        if len(agent.saved[i]) < params['batch_size']:
+            continue
+
+        for (log_prob, ret, pi_phi, pi_d, ret_ae) in agent.saved[i]:
+            state, recon = ret_ae
+            recon_loss.append(mse(recon, state))
+            total += 1
+
+        agent.rewards.clear()
+        agent.deltas.clear()
+        agent.saved.clear()
+    if len(recon_loss) > 0:
+        optimizer.zero_grad()
+        recon_loss = torch.stack(recon_loss)
+        recon_loss = recon_loss.sum() / total
+
+        loss = recon_loss
+        # loss.backward(retain_graph=True)
+        loss.backward(retain_graph=False)
+        # torch.nn.utils.clip_grad_norm_(agent.parameters(), 40.)
+        optimizer.step()
+        return {'RL': recon_loss.data.item()}
     else:
         return {}
 
@@ -265,7 +299,6 @@ def train_agent_parallel(envs, params):
         preprocessors.append(preprocessor)
 
     agent = agent_lookup(params)
-    agent.train()
 
     if params['optim'] == 'rms':
         optimizer = torch.optim.RMSprop(agent.parameters(), lr=params['learning_rate'])
@@ -277,6 +310,11 @@ def train_agent_parallel(envs, params):
 
     if params['use_cuda']:
         agent = agent.cuda()
+
+    if params['restore'] is not None:
+        restore_model(agent, params['restore'], params['use_cuda'])
+
+    agent.train()
 
     episode_rewards = []
     start = time.time()
@@ -329,14 +367,14 @@ def train_agent_parallel(envs, params):
                 #     if len(agent.rewards[i]) < 1:
                 #         continue
 
-                    # var_state = createVariable(states[i], use_cuda=params['use_cuda'])
-                    # next_state_val = agent.get_state_val(var_state).data[0][0]
-                    # agent.deltas[i][-1] += params['gamma'] * next_state_val
+                # var_state = createVariable(states[i], use_cuda=params['use_cuda'])
+                # next_state_val = agent.get_state_val(var_state).data[0][0]
+                # agent.deltas[i][-1] += params['gamma'] * next_state_val
 
-                    # if env_status[i]:
-                    #     agent.rewards[i].append(0.0)
-                    # else:
-                    #     agent.rewards[i].append(next_state_val)
+                # if env_status[i]:
+                #     agent.rewards[i].append(0.0)
+                # else:
+                #     agent.rewards[i].append(next_state_val)
 
                 l_dict = train_step_parallel(agent, optimizer, params)
                 loss_dict = merge_loss_dicts(loss_dict, l_dict)

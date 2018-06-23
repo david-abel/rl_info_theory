@@ -214,8 +214,16 @@ class VAEAgent(nn.Module):
         self.fc4 = nn.Linear(self.hidden_size, self.hidden_size)
         self.p_fc = nn.Linear(self.hidden_size, self.action_dim)
 
-        self.training = True
-        self.use_concrete = False
+        self.r_fc1 = nn.Linear(self.rep_size, 512)
+        self.r_fc2 = nn.Linear(512, 7744)
+        self.dc1 = nn.ConvTranspose2d(64, 64, kernel_size=3, stride=1, padding=1)
+        self.dc2 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=2)
+        self.dc3 = nn.ConvTranspose2d(32, 4, kernel_size=8, stride=4)
+
+        # self.dc1 = nn.ConvTranspose2d(self.rep_size, 64, kernel_size=5, stride=1)
+        # self.dc2 = nn.ConvTranspose2d(64, 64, kernel_size=5, stride=1)
+        # self.dc3 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2)
+        # self.dc4 = nn.ConvTranspose2d(32, 4, kernel_size=8, stride=4)
 
         if parallel:
             self.saved = defaultdict(list)
@@ -232,13 +240,11 @@ class VAEAgent(nn.Module):
         fc_out = F.relu(self.fc1(conv_flat))
         return self.fc_m(fc_out), self.fc_std(fc_out)
 
-    def concrete(self, state):
-        conv = F.relu(self.c3(F.relu(self.c2(F.relu(self.c1(state))))))
-        conv_flat = conv.view(state.size()[0], -1)
-        fc_out = self.fc2(F.relu(self.fc1(conv_flat)))
-        # print fc_out.data[0].numpy()
-        c = torch.clamp(torch.sign(fc_out), 0.0).data[0].cpu().numpy()
-        return RelaxedOneHotCategorical(self.temperature, logits=fc_out).sample(), c
+    def decode(self, z):
+        z = z.detach()
+        dfc = F.relu(self.r_fc2(F.relu(self.r_fc1(z)))).view(z.size(0), 64, 11, 11)
+        deconv = self.dc3(F.relu(self.dc2(F.relu(self.dc1(dfc)))))
+        return deconv
 
     def repr(self, mu, logvar):
         if self.training:
@@ -251,35 +257,31 @@ class VAEAgent(nn.Module):
     def forward(self, state):
         base_p, base_v = self.base_agent.forward(state)
         base_p, base_v = base_p.detach(), base_v.detach()
-        if self.use_concrete:
-            z, c = self.concrete(state)
-            # print z, z.max(1)[1]
-            # if not self.training:
-            # print ''.join(map(str, map(int, list(c)))), int(z.max(1)[1])
-        else:
-            mu, logvar = self.encode(state)
-            z = self.repr(mu, logvar)
-        # action_scores, state_value = self.p_fc(z), self.v_fc(z)
+        mu, logvar = self.encode(state)
+        z = self.repr(mu, logvar)
+
+        recon = self.decode(z)
         action_scores, state_value = self.p_fc(F.relu(self.fc4(F.relu(self.fc3(z))))), torch.tensor([0.0])
-        ret = (z, c) if self.use_concrete else (mu, logvar)
-        return F.softmax(action_scores, dim=1), state_value, ret, base_p
+        ret = (mu, logvar)
+        ret_ae = (state, recon)
+        return F.softmax(action_scores, dim=1), state_value, ret, base_p, ret_ae
 
     def sample_action(self, state, i=None):
-        probs, val, ret, demo = self.forward(state)
+        probs, val, ret, demo, ret_ae = self.forward(state)
         # print probs
         m = Categorical(demo)
         action = m.sample()
         if i is not None:
-            self.saved[i].append((m.log_prob(action), ret, probs, demo))
+            self.saved[i].append((m.log_prob(action), ret, probs, demo, ret_ae))
         else:
-            self.saved.append((m.log_prob(action), ret, probs, demo))
+            self.saved.append((m.log_prob(action), ret, probs, demo, ret_ae))
         return action.data[0], val.data[0]
 
     def sample_action_eval(self, state):
-        probs, val, ret, demo = self.forward(state)
+        probs, val, ret, demo, _ = self.forward(state)
         # print probs
-        soft = True
-        # soft = False
+        # soft = True
+        soft = False
         if soft:
             t = 75.
             s = torch.exp(probs * t) / torch.sum(torch.exp(probs * t))
@@ -290,18 +292,6 @@ class VAEAgent(nn.Module):
         # action = probs.max(1)[1]
         return action.data[0], val.data[0]
 
-    def sample_action_eval_code(self, state):
-        probs, val, r = self.forward(state)
-        z, c = r
-        m = Categorical(probs)
-        action = m.sample()
-        # action = probs.max(1)[1]
-        return action.data[0], val.data[0], ''.join(map(str, map(int, list(c))))
-        # return action.data[0], val.data[0], int(z.max(1)[1])
-
-    def flip_training(self):
-        self.training = not self.training
-
     def get_state_val(self, state):
-        _, val, _, _ = self.forward(state)
+        _, val, _, _, _ = self.forward(state)
         return val

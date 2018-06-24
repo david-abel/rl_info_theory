@@ -214,16 +214,16 @@ class VAEAgent(nn.Module):
         self.fc4 = nn.Linear(self.hidden_size, self.hidden_size)
         self.p_fc = nn.Linear(self.hidden_size, self.action_dim)
 
-        self.r_fc1 = nn.Linear(self.rep_size, 512)
-        self.r_fc2 = nn.Linear(512, 7744)
-        self.dc1 = nn.ConvTranspose2d(64, 64, kernel_size=3, stride=1, padding=1)
-        self.dc2 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=2)
-        self.dc3 = nn.ConvTranspose2d(32, 4, kernel_size=8, stride=4)
+        # self.r_fc1 = nn.Linear(self.rep_size, 512)
+        # self.r_fc2 = nn.Linear(512, 7744)
+        # self.dc1 = nn.ConvTranspose2d(64, 64, kernel_size=3, stride=1, padding=1)
+        # self.dc2 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=2)
+        # self.dc3 = nn.ConvTranspose2d(32, 4, kernel_size=8, stride=4)
 
-        # self.dc1 = nn.ConvTranspose2d(self.rep_size, 64, kernel_size=5, stride=1)
-        # self.dc2 = nn.ConvTranspose2d(64, 64, kernel_size=5, stride=1)
-        # self.dc3 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2)
-        # self.dc4 = nn.ConvTranspose2d(32, 4, kernel_size=8, stride=4)
+        self.dc1 = nn.ConvTranspose2d(self.rep_size, 64, kernel_size=5, stride=1)
+        self.dc2 = nn.ConvTranspose2d(64, 64, kernel_size=5, stride=1)
+        self.dc3 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2)
+        self.dc4 = nn.ConvTranspose2d(32, 4, kernel_size=8, stride=4)
 
         if parallel:
             self.saved = defaultdict(list)
@@ -242,8 +242,9 @@ class VAEAgent(nn.Module):
 
     def decode(self, z):
         z = z.detach()
-        dfc = F.relu(self.r_fc2(F.relu(self.r_fc1(z)))).view(z.size(0), 64, 11, 11)
-        deconv = self.dc3(F.relu(self.dc2(F.relu(self.dc1(dfc)))))
+        # dfc = F.relu(self.r_fc2(F.relu(self.r_fc1(z)))).view(z.size(0), 64, 11, 11)
+        # deconv = self.dc3(F.relu(self.dc2(F.relu(self.dc1(dfc)))))
+        deconv = self.dc4(F.relu(self.dc3(F.relu(self.dc2(F.relu(self.dc1(z)))))))
         return deconv
 
     def repr(self, mu, logvar):

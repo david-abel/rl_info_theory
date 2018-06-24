@@ -257,31 +257,33 @@ def train_step_parallel_vae(agent, optimizer, params):
 
 def train_step_parallel_decode(agent, optimizer, params):
     recon_loss = []
-    total = 0
-    mse = torch.nn.MSELoss(size_average=False)
+    mse = torch.nn.MSELoss(size_average=True)
 
     for i in range(params['num_envs']):
         if len(agent.saved[i]) < params['batch_size']:
             continue
 
-        for (log_prob, ret, pi_phi, pi_d, ret_ae) in agent.saved[i]:
-            state, recon = ret_ae
-            recon_loss.append(mse(recon, state))
-            total += 1
+        sample = random.sample(agent.saved[i], params['batch_size'])
+        aes = [x[4] for x in sample]
+        states = [x[0][0] for x in aes]
+        _, _, _, _, (_, recons) = agent.forward(torch.stack(states))
+        recon_loss.append(mse(recons, torch.stack(states)))
 
         agent.rewards.clear()
         agent.deltas.clear()
-        agent.saved.clear()
+        # agent.saved.clear()
+        while len(agent.saved[i]) > 1000:
+            agent.saved[i].pop(0)
+
     if len(recon_loss) > 0:
         optimizer.zero_grad()
         recon_loss = torch.stack(recon_loss)
-        recon_loss = recon_loss.sum() / total
+        recon_loss = recon_loss.sum()
 
         loss = recon_loss
-        # loss.backward(retain_graph=True)
         loss.backward(retain_graph=False)
-        # torch.nn.utils.clip_grad_norm_(agent.parameters(), 40.)
         optimizer.step()
+        print recon_loss.data.item()
         return {'RL': recon_loss.data.item()}
     else:
         return {}
@@ -314,7 +316,8 @@ def train_agent_parallel(envs, params):
     if params['use_cuda']:
         agent = agent.cuda()
 
-    agent.train()
+    # agent.train()
+    agent.eval()
 
     episode_rewards = []
     start = time.time()

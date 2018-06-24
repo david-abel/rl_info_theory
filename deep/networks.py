@@ -244,7 +244,7 @@ class VAEAgent(nn.Module):
         z = z.detach()
         # dfc = F.relu(self.r_fc2(F.relu(self.r_fc1(z)))).view(z.size(0), 64, 11, 11)
         # deconv = self.dc3(F.relu(self.dc2(F.relu(self.dc1(dfc)))))
-        deconv = self.dc4(F.relu(self.dc3(F.relu(self.dc2(F.relu(self.dc1(z)))))))
+        deconv = self.dc4(F.relu(self.dc3(F.relu(self.dc2(F.relu(self.dc1(z.view(z.size(0), self.rep_size, 1, 1))))))))
         return deconv
 
     def repr(self, mu, logvar):

@@ -232,9 +232,8 @@ def train_step_parallel_vae(agent, optimizer, params):
             prior_loss.append(p_loss)
             total += 1
 
-        agent.rewards.clear()
-        agent.deltas.clear()
         agent.saved.clear()
+
     if len(recon_loss) > 0 and len(prior_loss) > 0:
         optimizer.zero_grad()
         recon_loss = torch.stack(recon_loss)
@@ -269,8 +268,6 @@ def train_step_parallel_decode(agent, optimizer, params):
         _, _, _, _, (_, recons) = agent.forward(torch.stack(states))
         recon_loss.append(mse(recons, torch.stack(states)))
 
-        agent.rewards.clear()
-        agent.deltas.clear()
         # agent.saved.clear()
         while len(agent.saved[i]) > 1000:
             agent.saved[i].pop(0)
@@ -316,8 +313,9 @@ def train_agent_parallel(envs, params):
     if params['use_cuda']:
         agent = agent.cuda()
 
-    # agent.train()
-    agent.eval()
+    agent.train()
+    if params['arch'] == 'DBAgentAE':
+        agent.eval()
 
     episode_rewards = []
     start = time.time()
@@ -354,31 +352,10 @@ def train_agent_parallel(envs, params):
                         env_status[i] = True
                         break
 
-                agent.rewards[i].append(np.sign(reward))
-                # agent.deltas[i].append(np.sign(reward) - state_val[0])
                 episode_reward[i] += reward
-
-                if len(agent.deltas[i]) > 1:
-                    # delta = agent.rewards[i][-2] + params['gamma'] * state_val[0] - agent.saved[i][-2][1].data[0][0]
-                    # agent.deltas[i].append(delta)
-                    agent.deltas[i][-2] += params['gamma'] * state_val[0]
-
                 states[i] = preprocessors[i].process_state(env_states[i]) if preprocessors[i] else env_states[i]
 
             if t % params['update_freq'] == 0:
-                # for i, env in enumerate(envs):
-                #     if len(agent.rewards[i]) < 1:
-                #         continue
-
-                # var_state = createVariable(states[i], use_cuda=params['use_cuda'])
-                # next_state_val = agent.get_state_val(var_state).data[0][0]
-                # agent.deltas[i][-1] += params['gamma'] * next_state_val
-
-                # if env_status[i]:
-                #     agent.rewards[i].append(0.0)
-                # else:
-                #     agent.rewards[i].append(next_state_val)
-
                 l_dict = train_step_parallel(agent, optimizer, params)
                 loss_dict = merge_loss_dicts(loss_dict, l_dict)
                 num_updates += 1

@@ -241,7 +241,6 @@ class VAEAgent(nn.Module):
         return self.fc_m(fc_out), self.fc_std(fc_out)
 
     def decode(self, z):
-        z = z.detach()
         dfc = F.relu(self.r_fc2(F.relu(self.r_fc1(z)))).view(z.size(0), 64, 11, 11)
         deconv = self.dc3(F.relu(self.dc2(F.relu(self.dc1(dfc)))))
         return deconv
@@ -260,7 +259,7 @@ class VAEAgent(nn.Module):
         mu, logvar = self.encode(state)
         z = self.repr(mu, logvar)
 
-        recon = self.decode(z)
+        recon = self.decode(z.detach())
         action_scores, state_value = self.p_fc(F.relu(self.fc4(F.relu(self.fc3(z))))), torch.tensor([0.0])
         ret = (mu, logvar)
         ret_ae = (state, recon)
@@ -295,3 +294,11 @@ class VAEAgent(nn.Module):
     def get_state_val(self, state):
         _, val, _, _, _ = self.forward(state)
         return val
+
+    def sample_latent(self):
+        z = torch.randn_like(torch.zeros((1, self.rep_size)))
+        recon = self.decode(z)
+        return z.detach(), recon.detach()
+
+    def decode_latent(self, z):
+        return self.decode(z).detach()

@@ -264,7 +264,7 @@ def train_step_parallel_decode(agent, optimizer, params):
 
         sample = random.sample(agent.saved[i], params['batch_size'])
         aes = [x[4] for x in sample]
-        states = [x[4][0] for x in aes]
+        states = [x[0] for x in aes]
         _, _, _, _, (_, recons) = agent.forward(torch.stack(states))
         recon_loss.append(mse(recons, torch.stack(states)))
 

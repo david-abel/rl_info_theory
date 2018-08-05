@@ -68,7 +68,7 @@ def main():
               "history": 4,
               "use_luminance": True,
               "optim": 'adam',
-              "update_freq": 1,
+              "update_freq": 4,
               "num_envs": 1,
               "gamma": 0.99,
               "restore": None

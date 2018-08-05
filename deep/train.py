@@ -219,34 +219,34 @@ def train_step_parallel_vae(agent, optimizer, params):
     total = 0
 
     for i in range(params['num_envs']):
-        if len(agent.saved[i]) < params['batch_size']:
-            continue
+        # if len(agent.saved[i]) < params['batch_size']:
+        #     continue
 
-        sample = random.sample(agent.saved[i], params['batch_size'])
-        states = [x[4][0] for x in sample]
-        pi_phis, _, rets, pi_ds, _ = agent.forward(torch.stack(states))
-        mus, logvars = rets
-        for i in range(len(sample)):
-            pi_phi, mu, logvar, pi_d = pi_phis[i].unsqueeze(0), mus[i].unsqueeze(0),\
-                                       logvars[i].unsqueeze(0), pi_ds[i].unsqueeze(0)
-            r_loss, p_loss = loss_gauss_indiv(pi_d, pi_phi, mu, logvar)
-            recon_loss.append(r_loss)
-            prior_loss.append(p_loss)
-            total += 1
-
-        # for (log_prob, ret, pi_phi, pi_d, _) in agent.saved[i]:
-        #     # entropy = 0.01 * -torch.mul(pi_phi, torch.log(pi_phi)).sum()
-        #     mu, logvar = ret
+        # sample = random.sample(agent.saved[i], params['batch_size'])
+        # states = [x[4][0] for x in sample]
+        # pi_phis, _, rets, pi_ds, _ = agent.forward(torch.stack(states))
+        # mus, logvars = rets
+        # for i in range(len(sample)):
+        #     pi_phi, mu, logvar, pi_d = pi_phis[i].unsqueeze(0), mus[i].unsqueeze(0),\
+        #                                logvars[i].unsqueeze(0), pi_ds[i].unsqueeze(0)
         #     r_loss, p_loss = loss_gauss_indiv(pi_d, pi_phi, mu, logvar)
-        #     # print r_loss, p_loss
         #     recon_loss.append(r_loss)
-        #     # recon_loss.append(r_loss - entropy)
         #     prior_loss.append(p_loss)
         #     total += 1
 
-        # agent.saved.clear()
-        while len(agent.saved[i]) > 10000:
-            agent.saved[i].pop(0)
+        for (log_prob, ret, pi_phi, pi_d, _) in agent.saved[i]:
+            # entropy = 0.01 * -torch.mul(pi_phi, torch.log(pi_phi)).sum()
+            mu, logvar = ret
+            r_loss, p_loss = loss_gauss_indiv(pi_d, pi_phi, mu, logvar)
+            # print r_loss, p_loss
+            recon_loss.append(r_loss)
+            # recon_loss.append(r_loss - entropy)
+            prior_loss.append(p_loss)
+            total += 1
+
+        agent.saved.clear()
+        # while len(agent.saved[i]) > 10000:
+        #     agent.saved[i].pop(0)
 
     if len(recon_loss) > 0 and len(prior_loss) > 0:
         optimizer.zero_grad()

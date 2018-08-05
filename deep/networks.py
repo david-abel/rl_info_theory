@@ -272,9 +272,9 @@ class VAEAgent(nn.Module):
         m = Categorical(demo)
         action = m.sample()
         if i is not None:
-            self.saved[i].append((m.log_prob(action), ret, probs, demo, state))
+            self.saved[i].append((m.log_prob(action), ret, probs, demo, state.cpu().data.numpy()))
         else:
-            self.saved.append((m.log_prob(action), ret, probs, demo, state))
+            self.saved.append((m.log_prob(action), ret, probs, demo, state.cpu().data.numpy()))
         return action.data[0], val.data[0]
 
     def sample_action_eval(self, state):

@@ -51,7 +51,7 @@ def main():
     print str(envs[0].unwrapped.get_action_meanings())
 
     params = {"arch": agent,
-              "learning_rate": 0.001,
+              "learning_rate": 0.00025,
               "beta": beta,
               "batch_size": 16,
               "state_dim": 4,
@@ -68,7 +68,7 @@ def main():
               "history": 4,
               "use_luminance": True,
               "optim": 'adam',
-              "update_freq": 4,
+              "update_freq": 1,
               "num_envs": 1,
               "gamma": 0.99,
               "restore": None

@@ -222,17 +222,29 @@ def train_step_parallel_vae(agent, optimizer, params):
         if len(agent.saved[i]) < params['batch_size']:
             continue
 
-        for (log_prob, ret, pi_phi, pi_d, _) in agent.saved[i]:
-            # entropy = 0.01 * -torch.mul(pi_phi, torch.log(pi_phi)).sum()
+        sample = random.sample(agent.saved[i], params['batch_size'])
+        states = [x[4][0] for x in sample]
+        for s in states:
+            pi_phi, _, ret, pi_d, _ = agent.forward(createVariable(s, use_cuda=params['use_cuda']))
             mu, logvar = ret
             r_loss, p_loss = loss_gauss_indiv(pi_d, pi_phi, mu, logvar)
-            # print r_loss, p_loss
             recon_loss.append(r_loss)
-            # recon_loss.append(r_loss - entropy)
             prior_loss.append(p_loss)
             total += 1
 
-        agent.saved.clear()
+        # for (log_prob, ret, pi_phi, pi_d, _) in agent.saved[i]:
+        #     # entropy = 0.01 * -torch.mul(pi_phi, torch.log(pi_phi)).sum()
+        #     mu, logvar = ret
+        #     r_loss, p_loss = loss_gauss_indiv(pi_d, pi_phi, mu, logvar)
+        #     # print r_loss, p_loss
+        #     recon_loss.append(r_loss)
+        #     # recon_loss.append(r_loss - entropy)
+        #     prior_loss.append(p_loss)
+        #     total += 1
+
+        # agent.saved.clear()
+        while len(agent.saved[i]) > 10000:
+            agent.saved[i].pop(0)
 
     if len(recon_loss) > 0 and len(prior_loss) > 0:
         optimizer.zero_grad()
@@ -248,7 +260,7 @@ def train_step_parallel_vae(agent, optimizer, params):
         loss.backward(retain_graph=False)
         torch.nn.utils.clip_grad_norm_(agent.parameters(), 40.)
         optimizer.step()
-        print loss.data.item(), recon_loss.data.item(), prior_loss.data.item()
+        # print loss.data.item(), recon_loss.data.item(), prior_loss.data.item()
         return {'RL': recon_loss.data.item(), 'PL': prior_loss.data.item()}
     else:
         return {}
@@ -269,7 +281,7 @@ def train_step_parallel_decode(agent, optimizer, params):
         recon_loss.append(mse(recons, torch.stack(states)))
 
         # agent.saved.clear()
-        while len(agent.saved[i]) > 1000:
+        while len(agent.saved[i]) > 10000:
             agent.saved[i].pop(0)
 
     if len(recon_loss) > 0:

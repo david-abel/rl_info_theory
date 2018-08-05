@@ -224,9 +224,11 @@ def train_step_parallel_vae(agent, optimizer, params):
 
         sample = random.sample(agent.saved[i], params['batch_size'])
         states = [x[4][0] for x in sample]
-        for s in states:
-            pi_phi, _, ret, pi_d, _ = agent.forward(createVariable(s, use_cuda=params['use_cuda']))
-            mu, logvar = ret
+        pi_phis, _, rets, pi_ds, _ = agent.forward(torch.stack(states))
+        mus, logvars = rets
+        for i in range(len(sample)):
+            pi_phi, mu, logvar, pi_d = pi_phis[i].unsqueeze(0), mus[i].unsqueeze(0),\
+                                       logvars[i].unsqueeze(0), pi_ds[i].unsqueeze(0)
             r_loss, p_loss = loss_gauss_indiv(pi_d, pi_phi, mu, logvar)
             recon_loss.append(r_loss)
             prior_loss.append(p_loss)

@@ -71,7 +71,7 @@ def agent_lookup(params):
         if 'DBAgent' == params['arch']:
             print 'Running episodic DB'
         elif 'DBAgentAE' == params['arch']:
-            print 'Training AE for pre-trained DB agent'
+            print 'Running AE for pre-trained DB agent'
 
         agent = A2C(params['state_dim'], params['action_dim'])
         if params['use_cuda']:

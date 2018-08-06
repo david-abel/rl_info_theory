@@ -10,14 +10,14 @@ from collections import defaultdict
 # Other imports.
 from simple_rl.abstraction.state_abs.ProbStateAbstractionClass import ProbStateAbstraction, convert_prob_sa_to_sa
 from simple_rl.abstraction.AbstractionWrapperClass import AbstractionWrapper
-from simple_rl.agents import FixedPolicyAgent, RandomAgent
-from simple_rl.tasks import FourRoomMDP, GridWorldMDP
+from simple_rl.agents import FixedPolicyAgent, RandomAgent, QLearningAgent
+from simple_rl.tasks import FourRoomMDP, GridWorldMDP, RandomMDP, TrenchOOMDP
 from simple_rl.mdp import State
 from simple_rl.planning import ValueIteration
 from simple_rl.run_experiments import run_agents_on_mdp, evaluate_agent
 from simple_rl.utils import chart_utils
 from blahut_arimoto import print_coding_pmf, print_pmf, mutual_info
-from plot_barley import make_barley_val_and_size_plots
+from plot_info_sa import make_info_sa_val_and_size_plots, make_info_sa_num_states_plot
 from rlit_utils import *
 
 distance_func = kl
@@ -125,11 +125,12 @@ def get_sa_size_from_phi_pmf(phi_pmf):
     total = 0
     s_phi_set = set([])
     for s in phi_pmf:
-        for s_phi in phi_pmf[s]:
-            if phi_pmf[s][s_phi] > 0 and s_phi not in s_phi_set:
-                s_phi_set.add(s_phi)
+        # for s_phi in phi_pmf[s]:
+        total += entropy(phi_pmf[s])
+            # if phi_pmf[s][s_phi] > 0 and s_phi not in s_phi_set:
+            #     s_phi_set.add(s_phi)
 
-    return len(s_phi_set)
+    return total #len(s_phi_set)
 
 
 # -----------------------------
@@ -395,10 +396,10 @@ def init_uniform_pi(pmf, actions):
 
 
 # -----------------------
-# -- BARLEY Main Steps --
+# -- info_sa Main Steps --
 # -----------------------
 
-def run_barley(mdp, demo_policy_lambda, iters=100, beta=20.0, convergence_threshold=0.01):
+def run_info_sa(mdp, demo_policy_lambda, iters=100, beta=20.0, convergence_threshold=0.01):
     '''
     Args:
         mdp (simple_rl.MDP)
@@ -438,7 +439,7 @@ def run_barley(mdp, demo_policy_lambda, iters=100, beta=20.0, convergence_thresh
     # Abstract state space.
     abstract_states = pmf_s_phi.keys()
 
-    # BARLEY.
+    # info_sa.
     for i in range(iters):
         print 'Iteration {0} of {1}'.format(i+1, iters)
 
@@ -467,7 +468,7 @@ def run_barley(mdp, demo_policy_lambda, iters=100, beta=20.0, convergence_thresh
         abstr_policy_pmf = next_abstr_policy_pmf
 
         if is_coding_converged and is_policy_converged and is_pmf_s_phi_converged:
-            print "\tBARLEY Converged."
+            print "\tinfo_sa Converged."
             break
 
     return pmf_s_phi, phi_pmf, abstr_policy_pmf
@@ -477,7 +478,7 @@ def run_barley(mdp, demo_policy_lambda, iters=100, beta=20.0, convergence_thresh
 # -- Main Experiment --
 # ---------------------
 
-def barley_compare_policies(mdp, demo_policy_lambda, beta=3.0):
+def info_sa_compare_policies(mdp, demo_policy_lambda, beta=3.0):
     '''
     Args:
         mdp (simple_rl.MDP)
@@ -485,10 +486,10 @@ def barley_compare_policies(mdp, demo_policy_lambda, beta=3.0):
         beta (float)
 
     Summary:
-        Runs BARLEY and compares the value of the found policy with the demonstrator policy.
+        Runs info_sa and compares the value of the found policy with the demonstrator policy.
     '''
-    # Run BARLEY.
-    pmf_s_phi, phi_pmf, abstr_policy_pmf = run_barley(mdp, demo_policy_lambda, iters=100, beta=beta, convergence_threshold=0.00001)
+    # Run info_sa.
+    pmf_s_phi, phi_pmf, abstr_policy_pmf = run_info_sa(mdp, demo_policy_lambda, iters=100, beta=beta, convergence_threshold=0.00001)
 
     # Make demonstrator agent and random agent.
     demo_agent = FixedPolicyAgent(demo_policy_lambda, name="$\\pi_d$")
@@ -510,18 +511,18 @@ def barley_compare_policies(mdp, demo_policy_lambda, beta=3.0):
     print "\t|S_\\phi|_crisp =", crisp_s_phi.get_num_abstr_states()
     print
 
-
-def barley_visualize_abstr(mdp, beta=2.0):
+def info_sa_visualize_abstr(mdp, demo_policy, beta=2.0):
     '''
     Args:
         mdp (simple_rl.MDP)
+        demo_policy (lambda : simple_rl.State --> str)
         beta (float)
 
     Summary:
-        Visualizes the state abstraction found by BARLEY using pygame.
+        Visualizes the state abstraction found by info_sa using pygame.
     '''
-    # Run BARLEY.
-    pmf_s_phi, phi_pmf, abstr_policy = run_barley(mdp, iters=100, beta=beta, convergence_threshold=0.00001)
+    # Run info_sa.
+    pmf_s_phi, phi_pmf, abstr_policy = run_info_sa(mdp, demo_policy, iters=100, beta=beta, convergence_threshold=0.00001)
     lambda_abstr_policy = get_lambda_policy(abstr_policy)
     prob_s_phi = ProbStateAbstraction(phi_pmf)
     crisp_s_phi = convert_prob_sa_to_sa(prob_s_phi)
@@ -529,33 +530,72 @@ def barley_visualize_abstr(mdp, beta=2.0):
     from simple_rl.abstraction.state_abs.sa_helpers import visualize_state_abstr_grid
     visualize_state_abstr_grid(mdp, crisp_s_phi)
 
+
+def learn_w_abstr(mdp, demo_policy, beta_list=[0.0, 2.0, 10.0, 20.0]):
+    '''
+    Args:
+        mdp (simple_rl.MDP)
+        demo_policy (lambda : simple_rl.State --> str)
+        beta (float)
+
+    Summary:
+        Computes a state abstraction for the given beta and compares Q-Learning with and without the abstraction.
+    '''
+    # Run info_sa.
+    dict_of_phi_pmfs = {}
+    for beta in beta_list:
+        pmf_s_phi, phi_pmf, abstr_policy_pmf = run_info_sa(mdp, demo_policy, iters=300, beta=beta, convergence_threshold=0.0001)
+
+        # Translate abstractions.
+        prob_s_phi = ProbStateAbstraction(phi_pmf)
+        crisp_s_phi = convert_prob_sa_to_sa(prob_s_phi)
+        dict_of_phi_pmfs[beta] = crisp_s_phi
+
+    # Make agents.
+    demo_agent = FixedPolicyAgent(demo_policy, name="$\\pi_d$")
+    ql_agent = QLearningAgent(mdp.get_actions())
+    agent_dict = {}
+    for beta in beta_list:
+        beta_phi = dict_of_phi_pmfs[beta]
+        ql_abstr_agent = AbstractionWrapper(QLearningAgent, state_abstr=dict_of_phi_pmfs, agent_params={"actions":mdp.get_actions()}, name_ext="-$\\phi_{\\beta = " + str(beta) + "$")
+
+    # Learn.
+    run_agents_on_mdp([ql_agent, ql_abstr_agent], mdp, episodes=500, steps=50, instances=100)
+
+    # Print num abstract states.
+    for beta in dict_of_phi_pmfs.keys():
+        print "beta |S_phi|:", beta, dict_of_phi_pmfs[beta].get_num_ground_states()
+    print
+
 def main():
 
     # Make MDP.
-    grid_dim = 4
-
-    # Upworld.
-    mdp = GridWorldMDP(width=grid_dim, height=grid_dim, init_loc=(1, 1), goal_locs=[(i, grid_dim) for i in range(1, grid_dim*4)], gamma=0.95)
-
+    grid_dim = 9
+    mdp = FourRoomMDP(width=grid_dim, height=grid_dim, init_loc=(1, 1), goal_locs=[(grid_dim, grid_dim)], gamma=0.9)
+    
     # Choose experiment and parameters.
-    exp_type = "plot_barley_val_and_num_states"
-    beta_range = list(chart_utils.drange(0.0, 1.0, 0.2))
-    instances = 5
+    exp_type = "learn_w_abstr"
+    beta_range = list(chart_utils.drange(0.0, 30.0, 5.0))
 
     # Get demo policy.
     vi = ValueIteration(mdp)
     vi.run_vi()
     demo_policy = get_lambda_policy(make_det_policy_eps_greedy(vi.policy, vi.get_states(), mdp.get_actions(), epsilon=0.2))
 
-    if exp_type == "plot_barley_val_and_num_states":
+    if exp_type == "plot_info_sa_val_and_num_states":
         # Makes the main two plots.
-        make_barley_val_and_size_plots(mdp, demo_policy, beta_range)
+        make_info_sa_val_and_size_plots(mdp, demo_policy, beta_range)
+    elif exp_type == "plot_info_sa_num_states":
+        make_info_sa_num_states_plot(mdp, demo_policy, beta_range)
     elif exp_type == "compare_policies":
-        # Makes a plot comparing value of pi-phi combo from BARLEY with \pi_d.
-        barley_compare_policies(mdp, demo_policy, beta=2.0)
-    elif exp_type == "visualize_barley_abstr":
-        # Visualize the state abstraction found by BARLEY.
-        barley_visualize_abstr(mdp, demo_policy, beta=2.0)
+        # Makes a plot comparing value of pi-phi combo from info_sa with \pi_d.
+        info_sa_compare_policies(mdp, demo_policy, beta=2.0)
+    elif exp_type == "visualize_info_sa_abstr":
+        # Visualize the state abstraction found by info_sa.
+        info_sa_visualize_abstr(mdp, demo_policy, beta=100.0)
+    elif exp_type == "learn_w_abstr":
+        # Run learning experiments for different settings of \beta.
+        learn_w_abstr(mdp, demo_policy)
 
 if __name__ == "__main__":
     main()

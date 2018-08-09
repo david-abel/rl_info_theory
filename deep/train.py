@@ -208,7 +208,7 @@ def loss_gauss(pi_d, pi_phi, mu, logvar, params):
 
 def loss_gauss_indiv(pi_d, pi_phi, mu, logvar):
     kld = torch.nn.KLDivLoss(size_average=False)
-    recon_loss = kld(torch.log(pi_phi), pi_d)
+    recon_loss = kld(torch.log(pi_phi + 1e-8), pi_d)
     prior_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1)
     return recon_loss, prior_loss
 

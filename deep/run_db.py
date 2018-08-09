@@ -24,14 +24,18 @@ def parse_args():
     parser.add_argument("-agent", type=str, help="Choose DBAgent or DBAgentAE")
     parser.add_argument("-beta", type=float, help="Beta value")
     parser.add_argument("--restore", type=str, help="Provide path to saved model for trainr or eval modes")
+    parser.add_argument("--seed", type=int, help="Random number seed")
     args = parser.parse_args()
     print 'CLI args: {0}'.format(args)
 
-    return args.agent, args.mode, args.beta, args.restore
+    return args.agent, args.mode, args.beta, args.restore, args.seed
 
 
 def main():
-    agent, mode, beta, restore = parse_args()
+    agent, mode, beta, restore, seed = parse_args()
+
+    random.seed(seed)
+    torch.manual_seed(seed) if not use_cuda else torch.cuda.manual_seed(seed)
 
     assert mode is not None and agent is not None and beta is not None
 
@@ -60,7 +64,7 @@ def main():
               'print_every': 1,
               'save_every': 10,
               'env_name': env_name,
-              'num_episodes': 1500,
+              'num_episodes': 3000,
               'max_steps': 500000,
               'env_render': not use_cuda,
               "use_preproc": True,

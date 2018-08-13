@@ -34,8 +34,9 @@ def parse_args():
 def main():
     agent, mode, beta, restore, seed = parse_args()
 
-    random.seed(seed)
-    torch.manual_seed(seed) if not use_cuda else torch.cuda.manual_seed(seed)
+    if seed:
+        random.seed(seed)
+        torch.manual_seed(seed) if not use_cuda else torch.cuda.manual_seed(seed)
 
     assert mode is not None and agent is not None and beta is not None
 
@@ -75,7 +76,8 @@ def main():
               "update_freq": 4,
               "num_envs": 1,
               "gamma": 0.99,
-              "restore": None
+              "restore": None,
+              "seed": seed
               }
 
     print sorted(params.iteritems())

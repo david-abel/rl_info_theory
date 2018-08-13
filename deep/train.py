@@ -397,5 +397,5 @@ def train_agent_parallel(envs, params):
                         timeSince(start, episode / params['num_episodes']), visit, total_steps)
 
         if episode % params['save_every'] == 0:
-            torch.save(agent.state_dict(), './agents/{0}_{1}_{2}'.format(params['arch'], params['env_name']
-                                                                         , params['beta']))
+            torch.save(agent.state_dict(), './agents/{0}_{1}_{2}_{3}'.format(params['arch'], params['env_name']
+                                                                         , int(params['beta']), params['seed']))

@@ -208,7 +208,7 @@ def loss_gauss(pi_d, pi_phi, mu, logvar, params):
 
 def loss_gauss_indiv(pi_d, pi_phi, mu, logvar):
     kld = torch.nn.KLDivLoss(size_average=False)
-    recon_loss = kld(torch.log(pi_phi), pi_d)
+    recon_loss = kld(torch.log(pi_phi + 1e-8), pi_d)
     prior_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), 1)
     return recon_loss, prior_loss
 
@@ -397,4 +397,5 @@ def train_agent_parallel(envs, params):
                         timeSince(start, episode / params['num_episodes']), visit, total_steps)
 
         if episode % params['save_every'] == 0:
-            torch.save(agent.state_dict(), './agents/{0}_{1}'.format(params['arch'], params['env_name']))
+            torch.save(agent.state_dict(), './agents/{0}_{1}_{2}_{3}'.format(params['arch'], params['env_name']
+                                                                         , int(params['beta']), params['seed']))

@@ -20,16 +20,11 @@ from simple_rl.planning import ValueIteration
 from simple_rl.run_experiments import run_agents_on_mdp, evaluate_agent
 from simple_rl.utils import chart_utils
 from blahut_arimoto import print_coding_pmf, print_pmf, mutual_info
-from plot_info_sa import make_info_sa_val_and_size_plots, make_info_sa_num_states_plot
+from plot_info_sa import make_info_sa_val_and_size_plots
 from rlit_utils import *
 
 distance_func = kl
 
-# TODOS:
-# Rewrite the entropy of H(S_\phi) --> it should really be expressed as p(s_phi \mid s) p(s), so the joint.
-# Rewrite the "crisp" stuff to better play along with DIB
-# Rewrite the plotting stuff to play along with DIB
-# Footnote 9 of DIB is super important: if a cluster is unused, it will never come back.
 
 # ----------------------
 # -- Policy Utilities --
@@ -112,22 +107,6 @@ def make_policy_det_max_policy(policy):
         new_policy[s] = {policy[s].keys()[policy[s].values().index(max(policy[s].values()))]:1.0}
 
     return new_policy
-
-
-# ------------------
-# -- Misc Helpers --
-# ------------------
-
-def get_sa_size_from_phi_pmf(phi_pmf, pmf_s_phi):
-    '''
-    Args:
-        phi_pmf (dict)
-
-    Returns:
-        (int)
-    '''
-    # TODO
-    pass
 
 
 # -----------------------------
@@ -577,12 +556,16 @@ def info_sa_compare_policies(mdp, demo_policy_lambda, beta=3.0, deterministic_ib
     # Run.
     run_agents_on_mdp([demo_agent, abstr_agent, rand_agent], mdp, episodes=1, steps=1000)
 
+
+    non_zero_abstr_states = [x for x in pmf_s_phi.values() if x > 0]
     # Print state space sizes.
     demo_vi = ValueIteration(mdp)
     print "\nState Spaces Sizes:"
     print "\t|S| =", demo_vi.get_num_states()
-    # print "\t|S_\\phi| =", get_sa_size_from_phi_pmf(phi_pmf, pmf_s_phi)
+    print "\tH(S_\\phi) =", entropy(pmf_s_phi)
     print "\t|S_\\phi|_crisp =", crisp_s_phi.get_num_abstr_states()
+    print "\tdelta_min =", min(non_zero_abstr_states)
+    print "\tnum non zero states =", len(non_zero_abstr_states)
     print
 
 def info_sa_visualize_abstr(mdp, demo_policy, beta=2.0, deterministic_ib=False):
@@ -672,12 +655,13 @@ def info_sa_planning_experiment(min_grid_size=5, max_grid_size=11, beta=10.0):
         write_datum(os.path.join(file_prefix, "times", vanilla_file), vanilla_time)
         write_datum(os.path.join(file_prefix, "times", sa_file), sa_time)
 
-def learn_w_abstr(mdp, demo_policy, beta_list=[0.0, 2.0, 10.0]):
+def learn_w_abstr(mdp, demo_policy, beta_list=[0.0, 2.0, 10.0], deterministic_ib=False):
     '''
     Args:
         mdp (simple_rl.MDP)
         demo_policy (lambda : simple_rl.State --> str)
-        beta (float)
+        beta_list (list)
+        deterministic_ib (bool)
 
     Summary:
         Computes a state abstraction for the given beta and compares Q-Learning with and without the abstraction.
@@ -685,7 +669,7 @@ def learn_w_abstr(mdp, demo_policy, beta_list=[0.0, 2.0, 10.0]):
     # Run info_sa.
     dict_of_phi_pmfs = {}
     for beta in beta_list:
-        pmf_s_phi, phi_pmf, abstr_policy_pmf = run_info_sa(mdp, demo_policy, iters=300, beta=beta, convergence_threshold=0.0001)
+        pmf_s_phi, phi_pmf, abstr_policy_pmf = run_info_sa(mdp, demo_policy, iters=300, beta=beta, convergence_threshold=0.0001, deterministic_ib=deterministic_ib)
 
         # Translate abstractions.
         prob_s_phi = ProbStateAbstraction(phi_pmf)
@@ -714,23 +698,26 @@ def main():
     # Make MDP.
     grid_dim = 11
     mdp = FourRoomMDP(width=grid_dim, height=grid_dim, init_loc=(1, 1), goal_locs=[(grid_dim, grid_dim)], gamma=0.9)
-    
-    # Choose experiment and parameters.
-    exp_type = "visualize_info_sa_abstr"
-    beta = 50.0
-    beta_range = list(chart_utils.drange(0.0, 30.0, 5.0))
-    deterministic_ib = False
+
+    # Experiment Type.
+    exp_type = "plot_info_sa_val_and_num_states"
+
+    # For comparing policies and visualizing.
+    beta = 15.0
+    deterministic_ib = True
+
+    # For main plotting experiment.
+    beta_range = list(chart_utils.drange(0.0, 5.0, 0.5))
+    instances = 10
 
     # Get demo policy.
     vi = ValueIteration(mdp)
-    vi.run_vi()
+    _, val = vi.run_vi()
     demo_policy = get_lambda_policy(make_det_policy_eps_greedy(vi.policy, vi.get_states(), mdp.get_actions(), epsilon=0.2))
 
     if exp_type == "plot_info_sa_val_and_num_states":
         # Makes the main two plots.
-        make_info_sa_val_and_size_plots(mdp, demo_policy, beta_range)
-    elif exp_type == "plot_info_sa_num_states":
-        make_info_sa_num_states_plot(mdp, demo_policy, beta_range)
+        make_info_sa_val_and_size_plots(mdp, demo_policy, beta_range, instances=instances)
     elif exp_type == "compare_policies":
         # Makes a plot comparing value of pi-phi combo from info_sa with \pi_d.
         info_sa_compare_policies(mdp, demo_policy, beta=beta, deterministic_ib=deterministic_ib)
@@ -739,7 +726,7 @@ def main():
         info_sa_visualize_abstr(mdp, demo_policy, beta=beta, deterministic_ib=deterministic_ib)
     elif exp_type == "learn_w_abstr":
         # Run learning experiments for different settings of \beta.
-        learn_w_abstr(mdp, demo_policy)
+        learn_w_abstr(mdp, demo_policy, deterministic_ib=deterministic_ib)
     elif exp_type == "planning":
         info_sa_planning_experiment()
 

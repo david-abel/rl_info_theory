@@ -297,6 +297,8 @@ def plot_state_size_vs_advantage(directory="info_sa_results", deterministic_ib=T
     pyplot.ylabel("$|S_\\phi|$")
     pyplot.title(method_name + ": Rate-Distortion Curve")
     pyplot.grid(True)
+    pyplot.tight_layout() # Keeps the spacing nice.
+
 
     # Fill under the curve.
     d = np.zeros(len(y_axis))

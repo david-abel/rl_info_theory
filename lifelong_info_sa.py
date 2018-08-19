@@ -7,7 +7,6 @@ import numpy as np
 
 # Other imports.
 from simple_rl.tasks import FourRoomMDP
-from simple_rl.utils import make_mdp
 from simple_rl.mdp import State
 from simple_rl.agents import QLearningAgent
 from simple_rl.abstraction.state_abs.StateAbstractionClass import StateAbstraction
@@ -15,14 +14,16 @@ from simple_rl.planning import ValueIteration
 from simple_rl.run_experiments import run_agents_lifelong
 from simple_rl.abstraction.AbstractValueIterationClass import AbstractValueIteration
 from simple_rl.run_experiments import evaluate_agent
+from make_mdp_distribution import make_mdp_distr
 from rlit_utils import *
 from info_sa import *
 
-def make_lifelong_sa_info_sa(mdp_distr, beta):
+def make_lifelong_sa_info_sa(mdp_distr, beta, deterministic_ib=False):
     '''
     Args:
         mdp_distr (simple_rl.MDPDistribution)
         beta (float)
+        deterministic_ib (float)
 
     Returns:
         (simple_rl.StateAbstraction)
@@ -37,7 +38,7 @@ def make_lifelong_sa_info_sa(mdp_distr, beta):
         demo_policy = get_lambda_policy(make_det_policy_eps_greedy(vi.policy, vi.get_states(), mdp.get_actions(), epsilon=0.2))
 
         # Get abstraction.
-        pmf_s_phi, phi_pmf, abstr_policy_pmf = run_info_sa(mdp, demo_policy, beta=beta)
+        pmf_s_phi, phi_pmf, abstr_policy_pmf = run_info_sa(mdp, demo_policy, beta=beta, deterministic_ib=deterministic_ib)
 
         crisp_sa = convert_prob_sa_to_sa(ProbStateAbstraction(phi_pmf))
 
@@ -94,10 +95,10 @@ def evaluate_lifelong_sa(lifelong_sa, mdp_distr, samples=10):
 def main():
 
     # Make MDP Distribution.
-    mdp_distr = make_mdp.make_mdp_distr(mdp_class="four_room", grid_dim=9)
+    mdp_distr = make_mdp_distr(mdp_class="four_room", grid_dim=11, slip_prob=0.05, gamma=0.99)
 
     # Make SA.
-    lifelong_sa = make_lifelong_sa_info_sa(mdp_distr, beta=100.0)
+    lifelong_sa = make_lifelong_sa_info_sa(mdp_distr, beta=20.0, deterministic_ib=True)
 
     # Make agent.
     # ql_agent = QLearningAgent(mdp_distr.get_actions())

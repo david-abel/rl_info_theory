@@ -272,34 +272,6 @@ def compute_abstr_policy(demo_policy, ground_states, abstract_states, actions, p
 # -- Init Distributions --
 # ------------------------
 
-def get_stationary_rho_from_abstr_policy(abstr_policy_pmf, phi_pmf, mdp, ground_states, sample_rate=20, max_steps=40):
-    '''
-    Args:
-        abstr_policy_pmf (dict): K=State ---> V=Pr(Action)
-        phi_pmf (dict): K=State --> V=dict(K=State --> V=Pr)
-        mdp (simple_rl.MDP)
-        ground_states (list)
-
-    Returns:
-        (dict): policy (see above)
-    '''
-    # Make it crispy.
-    new_phi = {}
-    for s_g in phi_pmf.keys():
-        new_phi[s_g] = phi_pmf[s_g].keys()[phi_pmf[s_g].values().index(max(phi_pmf[s_g].values()))]
-
-    def new_policy(state):
-        # Sample an abstract state.
-        # sampled_s_phi_index = np.random.multinomial(1, phi_pmf[state].values()).tolist().index(1)
-        # abstr_state = phi_pmf[state].keys()[sampled_s_phi_index]
-        abstr_state = new_phi[state]
-
-        # Sample an action.
-        sampled_a_index = np.random.multinomial(1, abstr_policy_pmf[abstr_state].values()).tolist().index(1)
-        return abstr_policy_pmf[abstr_state].keys()[sampled_a_index]
-
-    return get_stationary_rho_from_policy(new_policy, mdp, ground_states, sample_rate, max_steps)
-
 def get_stationary_rho_from_policy(policy, mdp, ground_states, sample_rate=200, max_steps=30):
     '''
     Args:
@@ -377,103 +349,17 @@ def init_random_phi(ground_states, deterministic=False):
     return new_phi_pmf, list(abstr_states)
 
 
-def init_identity_phi(ground_states):
-    '''
-    Args:
-        num_ground_states (int)
-
-    Returns:
-        (float)
-    '''
-    new_phi_pmf = defaultdict(lambda : defaultdict(float))
-
-    # Initialize the identity distribution
-    for i, s_g in enumerate(ground_states):
-        for s_phi in xrange(len(ground_states)):
-            new_phi_pmf[s_g][State(s_phi)] =  int(i == s_phi)
-
-    return new_phi_pmf
-
-
-def init_uniform_phi(num_ground_states):
-    '''
-    Args:
-        num_ground_states (int)
-
-    Returns:
-        (float)
-    '''
-    new_phi_pmf = defaultdict(lambda : defaultdict(float))
-
-    # Initialize the identity distribution
-    for s_g in range(num_ground_states):
-        for s_phi in range(num_ground_states):
-            new_phi_pmf[s_g][State(s_phi)] =  1.0 / num_ground_states
-
-    return new_phi_pmf
-
-def init_uniform_rho_phi(ground_states):
-    '''
-    Args:
-        ground_states (list)
-
-    Returns:
-        (dict)
-    '''
-    new_rho_phi = defaultdict(float)
-    for i in range(len(ground_states)):
-        new_rho_phi[i] = 1.0 / len(ground_states)
-
-    return new_rho_phi
-
-
-def init_random_pi(pmf, actions):
-    '''
-    Args:
-        pmf
-        actions (list)
-
-    Returns:
-        (dict)
-    '''
-    new_pi = defaultdict(lambda: defaultdict(float))
-
-    for s in pmf.keys():
-        action_distr = np.random.dirichlet([0.5] * len(actions)).tolist()
-        for i, a in enumerate(actions):
-            new_pi[s][a] = action_distr[i]
-
-    return new_pi
-
-
-def init_uniform_pi(pmf, actions):
-    '''
-    Args:
-        pmf
-        actions (list)
-
-    Returns:
-        (dict)
-    '''
-    new_pi = defaultdict(lambda: defaultdict(float))
-
-    for s in pmf.keys():
-        for a in actions:
-            new_pi[s][a] = 1.0 / len(actions)
-
-    return new_pi
 
 
 # ------------------------
 # -- info_sa Main Steps --
 # ------------------------
 
-def run_info_sa(mdp, demo_policy_lambda, deterministic=False, iters=500, beta=20.0, convergence_threshold=0.01, deterministic_ib=False):
+def run_info_sa(mdp, demo_policy_lambda, iters=500, beta=20.0, convergence_threshold=0.01, deterministic_ib=False):
     '''
     Args:
         mdp (simple_rl.MDP)
         demo_policy (lambda : simple_rl.State --> str)
-        deterministic (bool): If deterministic, we run the Deterministic Info Bottlekneck instead of regular IB.
         iters (int)
         beta (float)
         convergence_threshold (float): When all three distributions satisfy
@@ -674,7 +560,7 @@ def info_sa_planning_experiment(min_grid_size=5, max_grid_size=11, beta=10.0):
         write_datum(os.path.join(file_prefix, "times", vanilla_file), vanilla_time)
         write_datum(os.path.join(file_prefix, "times", sa_file), sa_time)
 
-def learn_w_abstr(mdp, demo_policy, beta_list=[0.0, 2.0, 10.0], deterministic_ib=False):
+def learn_w_abstr(mdp, demo_policy, beta_list=[0.0, 2.0, 5.0, 50.0], deterministic_ib=False):
     '''
     Args:
         mdp (simple_rl.MDP)
@@ -701,11 +587,11 @@ def learn_w_abstr(mdp, demo_policy, beta_list=[0.0, 2.0, 10.0], deterministic_ib
     agent_dict = {}
     for beta in beta_list:
         beta_phi = dict_of_phi_pmfs[beta]
-        ql_abstr_agent = AbstractionWrapper(QLearningAgent, state_abstr=dict_of_phi_pmfs[beta], agent_params={"actions":mdp.get_actions()}, name_ext="-$\\phi_{\\beta = " + str(beta) + "}$")
+        ql_abstr_agent = AbstractionWrapper(QLearningAgent, state_abstr=dict_of_phi_pmfs[beta], agent_params={"actions":mdp.get_actions(), "anneal":True}, name_ext="-$\\phi_{\\beta = " + str(beta) + "}$")
         agent_dict[beta] = ql_abstr_agent
 
     # Learn.
-    run_agents_on_mdp([ql_agent] + agent_dict.values(), mdp, episodes=2000, steps=50, instances=50)
+    run_agents_on_mdp([ql_agent] + agent_dict.values(), mdp, episodes=1000, steps=100, instances=20)
 
     # Print num abstract states.
     for beta in dict_of_phi_pmfs.keys():
@@ -716,28 +602,25 @@ def main():
 
     # Make MDP.
     grid_dim = 11
-    mdp = FourRoomMDP(width=grid_dim, height=grid_dim, init_loc=(1, 1), goal_locs=[(grid_dim, grid_dim)], gamma=0.95)
+    mdp = FourRoomMDP(width=grid_dim, height=grid_dim, init_loc=(1, 1), slip_prob=0.05, goal_locs=[(grid_dim, grid_dim)], gamma=0.99)
 
     # Experiment Type.
     exp_type = "learn_w_abstr"
 
     # For comparing policies and visualizing.
-    beta = 15.0
+    beta = 50.0
     deterministic_ib = True
 
     # For main plotting experiment.
-    beta_range = list(chart_utils.drange(0.0, 4.1, 0.2))
+    beta_range = list(chart_utils.drange(0.0, 4.0, 0.2))
     instances = 5
 
     # Get demo policy.
     vi = ValueIteration(mdp)
     _, val = vi.run_vi()
 
-    # Softmax policy.
-    demo_policy = get_lambda_policy(make_softmax_policy_pmf_from_vi(vi, temperature=0.4))
-
     # Epsilon greedy policy
-    # demo_policy = get_lambda_policy(make_det_policy_eps_greedy(vi.policy, vi.get_states(), mdp.get_actions(), epsilon=0.05))
+    demo_policy = get_lambda_policy(make_det_policy_eps_greedy(vi.policy, vi.get_states(), mdp.get_actions(), epsilon=0.1))
 
     if exp_type == "plot_info_sa_val_and_num_states":
         # Makes the main two plots.

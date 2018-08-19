@@ -57,6 +57,7 @@ def entropy(pmf):
 
     return total
 
+
 def conditional_entropy(pmf_y_given_x, pmf_x):
     '''
     Args:
@@ -139,4 +140,31 @@ def write_datum_to_file(file_name, datum, extra_dir=""):
 def end_of_instance(file_name, extra_dir=""):
     out_file = open(os.path.join(extra_dir, str(file_name)) + ".csv", "a+")
     out_file.write("\n")
+    out_file.close()
+
+def clear_files(dir_name):
+    '''
+    Args:
+        dir_name (str)
+
+    Summary:
+        Removes all csv files in @dir_name.
+    '''
+    for extension in ["iters", "times"]:
+        dir_w_extension = os.path.join(dir_name, extension)  # , mdp_type) + ".csv"
+        if not os.path.exists(dir_w_extension):
+            os.makedirs(dir_w_extension)
+
+        for mdp_type in ["vi", "vi-$\phi_{Q_d^*}$"]:
+            if os.path.exists(os.path.join(dir_w_extension, mdp_type) + ".csv"):
+                os.remove(os.path.join(dir_w_extension, mdp_type) + ".csv")
+
+def write_datum(file_name, datum):
+    '''
+    Args:
+        file_name (str)
+        datum (object)
+    '''
+    out_file = open(file_name, "a+")
+    out_file.write(str(datum) + ",")
     out_file.close()

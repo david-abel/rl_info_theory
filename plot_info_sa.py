@@ -1,5 +1,5 @@
 # Python imports.
-import os, sys, random
+import os, sys, random, math
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as pyplot
@@ -20,7 +20,7 @@ from rlit_utils import write_datum_to_file, end_of_instance
 # -- info_sa Plotting --
 # ---------------------
 
-def make_info_sa_val_and_size_plots(mdp, demo_policy_lambda, beta_range, results_dir="info_sa_results", instances=3):
+def make_info_sa_val_and_size_plots(mdp, demo_policy_lambda, beta_range, results_dir="info_sa_results", instances=3, include_stoch=False):
     '''
     Args:
         mdp (simple_rl.MDP)
@@ -28,12 +28,15 @@ def make_info_sa_val_and_size_plots(mdp, demo_policy_lambda, beta_range, results
         beta_range (list)
         results_dir (str)
         instances (int)
+        include_stoch (bool): If True, also runs IB.
 
     Summary:
         Main plotting function for info_sa experiments.
     '''
     # Clear old results.
-    all_policies = ["demo_val", "dib_val", "dib_states", "ib_val", "ib_states", "ground_states"]
+    all_policies = ["demo_val", "dib_val", "dib_states", "ground_states"]
+    if include_stoch:
+        all_policies += ["ib_val", "ib_states"]
     for policy in all_policies:
         if os.path.exists(os.path.join(results_dir, str(policy)) + ".csv"):
             os.remove(os.path.join(results_dir, str(policy)) + ".csv")
@@ -43,7 +46,7 @@ def make_info_sa_val_and_size_plots(mdp, demo_policy_lambda, beta_range, results
 
     # Record vallue of demo policy and size of ground state space.
     demo_agent = FixedPolicyAgent(demo_policy_lambda)
-    demo_val = evaluate_agent(demo_agent, mdp, instances=10)
+    demo_val = evaluate_agent(demo_agent, mdp, instances=30)
     vi = ValueIteration(mdp)
     num_ground_states = vi.get_num_states()
     for beta in beta_range:
@@ -52,30 +55,34 @@ def make_info_sa_val_and_size_plots(mdp, demo_policy_lambda, beta_range, results
 
     # Run core algorithm for DIB and IB.
     for instance in range(instances):
+        print "\nInstance", instance + 1, "of", str(instances) + "."
         random.jumpahead(1)
 
         # For each beta.
         for beta in beta_range:
-            ib_val, ib_states = _info_sa_val_and_size_plot_wrapper(beta=beta, param_dict=dict(param_dict.items() + {"deterministic_ib":False,"use_crisp_policy":False}.items()))
-            dib_val, dib_states = _info_sa_val_and_size_plot_wrapper(beta=beta, param_dict=dict(param_dict.items() + {"deterministic_ib":True,"use_crisp_policy":False}.items()))
 
-            # Record Values.
-            write_datum_to_file(file_name="ib_val", datum=ib_val, extra_dir=results_dir)
+            # Run DIB.
+            dib_val, dib_states = _info_sa_val_and_size_plot_wrapper(beta=beta, param_dict=dict(param_dict.items() + {"deterministic_ib":True,"use_crisp_policy":False}.items()))
             write_datum_to_file(file_name="dib_val", datum=dib_val, extra_dir=results_dir)
-            # Record States.
-            write_datum_to_file(file_name="ib_states", datum=ib_states, extra_dir=results_dir)
             write_datum_to_file(file_name="dib_states", datum=dib_states, extra_dir=results_dir)
 
-        # End instances.
-        end_of_instance("ib_val", extra_dir=results_dir)
+            if include_stoch:
+                ib_val, ib_states = _info_sa_val_and_size_plot_wrapper(beta=beta, param_dict=dict(param_dict.items() + {"deterministic_ib":False,"use_crisp_policy":False}.items()))
+                write_datum_to_file(file_name="ib_val", datum=ib_val, extra_dir=results_dir)
+                write_datum_to_file(file_name="ib_states", datum=ib_states, extra_dir=results_dir)
+
+        # End instances.        
         end_of_instance("dib_val", extra_dir=results_dir)
-        end_of_instance("ib_states", extra_dir=results_dir)
         end_of_instance("dib_states", extra_dir=results_dir)
+        if include_stoch:
+            end_of_instance("ib_val", extra_dir=results_dir)
+            end_of_instance("ib_states", extra_dir=results_dir)
+
 
     # Set title and axes.
-    chart_utils.CUSTOM_TITLE = "info_sa: $\\beta$ vs. Value"
+    chart_utils.CUSTOM_TITLE = "info sa: $\\beta$ vs. Value"
     chart_utils.X_AXIS_LABEL = "$\\beta$"
-    chart_utils.Y_AXIS_LABEL = "$V^{pi_\\phi}$"
+    chart_utils.Y_AXIS_LABEL = "$V^{\\pi_\\phi}$"
     chart_utils.X_AXIS_START_VAL = beta_range[0]
     chart_utils.X_AXIS_INCREMENT = beta_range[1] - beta_range[0]
     chart_utils.Y_AXIS_END_VAL = None
@@ -261,25 +268,34 @@ def plot_state_size_vs_advantage(directory="info_sa_results", deterministic_ib=T
     # Convert value to advantage.
     x_axis_name = "$V^{\\phi}$"
     if advantage:
-        demo_val = file(os.path.join(directory, "demo_val.csv")).read().split(",")[0]
+        demo_val = float(file(os.path.join(directory, "demo_val.csv")).read().split(",")[0])
         value_data = [demo_val - val for val in value_data]
         x_axis_name = "$\\mathbb{E}[A(V^d,V^{\\phi})]$"
 
     # Align the state-value pairs and rearrange to align with the RD curve.
+    # state_data = [math.ceil(x) for x in state_data]
     state_val_pairs = zip(value_data, state_data)
     sorted_list = sorted(state_val_pairs, key=lambda x: x[0])
     x_axis = [x[0] for x in sorted_list]
     y_axis = [x[1] for x in sorted_list]
 
-    # Flip x axis so we mirror the true rate distortion curve.
-    ax = pyplot.gca()
-    ax.invert_xaxis()
+    # Plot parameters.
+    font = {'size':14}
+    matplotlib.rc('font', **font)
+    matplotlib.rcParams['pdf.fonttype'] = 42
+    # matplotlib.rcParams['text.usetex'] = True
+    fig = matplotlib.pyplot.gcf()
+
+    if not advantage:
+        # Flip x axis so we mirror the true rate distortion curve.
+        ax = pyplot.gca()
+        ax.invert_xaxis()
 
     # Make plot.
     pyplot.plot(x_axis, y_axis,  marker='.') #, color=chart_utils.first_five[0])
-    pyplot.xlabel(method_name + x_axis_name)
-    pyplot.ylabel(method_name + " $|S_\\phi|$")
-    pyplot.title(method_name + " Rate-Distortion Curve")
+    pyplot.xlabel(x_axis_name)
+    pyplot.ylabel("$|S_\\phi|$")
+    pyplot.title(method_name + ": Rate-Distortion Curve")
     pyplot.grid(True)
 
     # Fill under the curve.
@@ -287,11 +303,11 @@ def plot_state_size_vs_advantage(directory="info_sa_results", deterministic_ib=T
     pyplot.fill_between(x_axis, y_axis, where=y_axis>=d, interpolate=True, alpha=0.4)# color=chart_utils.first_five[0], alpha=0.25)
 
     # Save the plot.
-    pyplot.savefig(os.path.join(directory, method_name) + "rate_dist.pdf", format="pdf")
+    pyplot.savefig(os.path.join(directory, method_name) + "_rate_dist.pdf", format="pdf")
     
     # Open it.
     open_prefix = "gnome-" if sys.platform == "linux" or sys.platform == "linux2" else ""
-    os.system(open_prefix + "open " + os.path.join(directory, method_name) + "rate_dist.pdf")
+    os.system(open_prefix + "open " + os.path.join(directory, method_name) + "_rate_dist.pdf")
 
     # Clear and close.
     pyplot.cla()
@@ -324,18 +340,18 @@ def _read_and_average_data_from_policies(file_name, directory):
         num_lines += 1
 
     # Compute averages.
-    value_data = [0] * num_data_per_line
+    average_data = [0] * num_data_per_line
     for line_number in data_per_line.keys():
         line_data = data_per_line[line_number]
 
         for index_into_line, val in enumerate(line_data):
-            value_data[index_into_line] +=  val / num_lines
+            average_data[index_into_line] +=  val / num_lines
 
-    return value_data
+    return average_data
 
 
 def main():
-    plot_state_size_vs_advantage(advantage=False)
+    plot_state_size_vs_advantage(advantage=True)
 
 if __name__ == "__main__":
     main()

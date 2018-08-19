@@ -1,12 +1,8 @@
 #!/usr/bin/env python
 
 # Python imports.
-import sys
-import math
+import sys, os, random, time, math
 import numpy as np
-import random
-import os
-import time
 from collections import defaultdict
 
 # Other imports.
@@ -24,7 +20,6 @@ from plot_info_sa import make_info_sa_val_and_size_plots
 from rlit_utils import *
 
 distance_func = kl
-
 
 # ----------------------
 # -- Policy Utilities --
@@ -66,6 +61,30 @@ def get_lambda_policy(policy):
 
     return lambda_policy
 
+def make_softmax_policy_pmf_from_vi(vi, temperature=2.0):
+    '''
+    Args:
+        vi (simple_rl.ValueIteration)
+        temperature (float)
+
+    Returns:
+        (dict)
+    '''
+    pmf_policy = defaultdict(lambda: defaultdict(float))
+
+    for state in vi.get_states():
+        all_q_vals = []
+        for i, action in enumerate(vi.actions):
+            all_q_vals.append(vi.get_q_value(state, action))
+
+        # Softmax distribution.
+        total = sum([np.exp(temperature * qv) for qv in all_q_vals])
+        softmax = [np.exp(temperature * qv) / total for qv in all_q_vals]
+
+        for i, action in enumerate(vi.actions):
+            pmf_policy[state][action] = softmax[i]
+
+    return pmf_policy
 
 def make_det_policy_eps_greedy(lambda_policy, ground_states, actions, epsilon=0.1):
     '''
@@ -492,7 +511,7 @@ def run_info_sa(mdp, demo_policy_lambda, deterministic=False, iters=500, beta=20
 
     # info_sa.
     for i in range(iters):
-        print 'Iteration {0} of {1}'.format(i+1, iters)
+        # print 'Iteration {0} of {1}'.format(i+1, iters)
 
         # (A) Compute \phi.
         next_phi_pmf = compute_phi_pmf(pmf_s, pmf_s_phi, demo_policy_pmf, abstr_policy_pmf, ground_states, abstract_states, beta=beta, deterministic=deterministic_ib)
@@ -697,23 +716,28 @@ def main():
 
     # Make MDP.
     grid_dim = 11
-    mdp = FourRoomMDP(width=grid_dim, height=grid_dim, init_loc=(1, 1), goal_locs=[(grid_dim, grid_dim)], gamma=0.9)
+    mdp = FourRoomMDP(width=grid_dim, height=grid_dim, init_loc=(1, 1), goal_locs=[(grid_dim, grid_dim)], gamma=0.95)
 
     # Experiment Type.
-    exp_type = "plot_info_sa_val_and_num_states"
+    exp_type = "learn_w_abstr"
 
     # For comparing policies and visualizing.
     beta = 15.0
     deterministic_ib = True
 
     # For main plotting experiment.
-    beta_range = list(chart_utils.drange(0.0, 5.0, 0.5))
-    instances = 10
+    beta_range = list(chart_utils.drange(0.0, 4.1, 0.2))
+    instances = 5
 
     # Get demo policy.
     vi = ValueIteration(mdp)
     _, val = vi.run_vi()
-    demo_policy = get_lambda_policy(make_det_policy_eps_greedy(vi.policy, vi.get_states(), mdp.get_actions(), epsilon=0.2))
+
+    # Softmax policy.
+    demo_policy = get_lambda_policy(make_softmax_policy_pmf_from_vi(vi, temperature=0.4))
+
+    # Epsilon greedy policy
+    # demo_policy = get_lambda_policy(make_det_policy_eps_greedy(vi.policy, vi.get_states(), mdp.get_actions(), epsilon=0.05))
 
     if exp_type == "plot_info_sa_val_and_num_states":
         # Makes the main two plots.

@@ -17,6 +17,7 @@ from simple_rl.run_experiments import run_agents_on_mdp, evaluate_agent
 from simple_rl.utils import chart_utils
 from blahut_arimoto import print_coding_pmf, print_pmf, mutual_info
 from plot_info_sa import make_info_sa_val_and_size_plots
+import agent_in_control
 from rlit_utils import *
 
 distance_func = kl
@@ -355,7 +356,7 @@ def init_random_phi(ground_states, deterministic=False):
 # -- info_sa Main Steps --
 # ------------------------
 
-def run_info_sa(mdp, demo_policy_lambda, iters=500, beta=20.0, convergence_threshold=0.01, deterministic_ib=False):
+def run_info_sa(mdp, demo_policy_lambda, iters=500, beta=20.0, convergence_threshold=0.01, is_deterministic_ib=False):
     '''
     Args:
         mdp (simple_rl.MDP)
@@ -364,9 +365,7 @@ def run_info_sa(mdp, demo_policy_lambda, iters=500, beta=20.0, convergence_thres
         beta (float)
         convergence_threshold (float): When all three distributions satisfy
             L1(p_{t+1}, p_t) < @convergence_threshold, we stop iterating.
-        deterministic_ib (bool): If true, run DIB, else IB.
-        is_agent_in_control (bool): If True, the agent's actions dictate the source distribution on states. Otherwise,
-            we assume the demonstrator policy controls the source distribution on states (which is then fixed).
+        is_deterministic_ib (bool): If true, run DIB, else IB.
 
     Returns:
         (dict): P(s_phi)
@@ -391,22 +390,22 @@ def run_info_sa(mdp, demo_policy_lambda, iters=500, beta=20.0, convergence_thres
     pmf_s = get_stationary_rho_from_policy(demo_policy_lambda, mdp, ground_states)
 
     # Init distributions.
-    phi_pmf, abstract_states = init_random_phi(ground_states, deterministic=deterministic_ib)
+    phi_pmf, abstract_states = init_random_phi(ground_states, deterministic=is_deterministic_ib)
     pmf_s_phi = compute_prob_of_s_phi(pmf_s, phi_pmf, ground_states, abstract_states)
-    abstr_policy_pmf = compute_abstr_policy(demo_policy_pmf, ground_states, abstract_states, actions, phi_pmf, pmf_s, pmf_s_phi, deterministic=deterministic_ib)
+    abstr_policy_pmf = compute_abstr_policy(demo_policy_pmf, ground_states, abstract_states, actions, phi_pmf, pmf_s, pmf_s_phi, deterministic=is_deterministic_ib)
 
     # info_sa.
     for i in range(iters):
         # print 'Iteration {0} of {1}'.format(i+1, iters)
 
         # (A) Compute \phi.
-        next_phi_pmf = compute_phi_pmf(pmf_s, pmf_s_phi, demo_policy_pmf, abstr_policy_pmf, ground_states, abstract_states, beta=beta, deterministic=deterministic_ib)
+        next_phi_pmf = compute_phi_pmf(pmf_s, pmf_s_phi, demo_policy_pmf, abstr_policy_pmf, ground_states, abstract_states, beta=beta, deterministic=is_deterministic_ib)
 
         # (B) Compute \rho(s).
         next_pmf_s_phi = compute_prob_of_s_phi(pmf_s, next_phi_pmf, ground_states, abstract_states)
 
         # (C) Compute \pi_\phi.
-        next_abstr_policy_pmf = compute_abstr_policy(demo_policy_pmf, ground_states, abstract_states, actions, next_phi_pmf, pmf_s, next_pmf_s_phi, deterministic=deterministic_ib)
+        next_abstr_policy_pmf = compute_abstr_policy(demo_policy_pmf, ground_states, abstract_states, actions, next_phi_pmf, pmf_s, next_pmf_s_phi, deterministic=is_deterministic_ib)
 
         # Convergence checks.
         coding_update_delta = max([l1_distance(next_phi_pmf[s], phi_pmf[s]) for s in ground_states])
@@ -434,19 +433,24 @@ def run_info_sa(mdp, demo_policy_lambda, iters=500, beta=20.0, convergence_thres
 # -- Main Experiment --
 # ---------------------
 
-def info_sa_compare_policies(mdp, demo_policy_lambda, beta=3.0, deterministic_ib=False):
+def info_sa_compare_policies(mdp, demo_policy_lambda, beta=3.0, is_deterministic_ib=False, is_agent_in_control=False):
     '''
     Args:
         mdp (simple_rl.MDP)
         demo_policy_lambda (lambda : simple_rl.State --> str)
         beta (float)
-        deterministic_ib (bool): If True, run DIB, else IB.
+        is_deterministic_ib (bool): If True, run DIB, else IB.
+        is_agent_in_control (bool): If True, runs the DIB in agent_in_control.py instead.
 
     Summary:
         Runs info_sa and compares the value of the found policy with the demonstrator policy.
     '''
-    # Run info_sa.
-    pmf_s_phi, phi_pmf, abstr_policy_pmf = run_info_sa(mdp, demo_policy_lambda, iters=500, beta=beta, convergence_threshold=0.00001, deterministic_ib=deterministic_ib)
+    if is_agent_in_control:
+        # Run info_sa with the agent controlling the MDP.
+        pmf_s_phi, phi_pmf, abstr_policy_pmf = agent_in_control.run_agent_in_control_info_sa(mdp, demo_policy_lambda, rounds=100, iters=500, beta=beta, is_deterministic_ib=is_deterministic_ib)
+    else:
+        # Run info_sa.
+        pmf_s_phi, phi_pmf, abstr_policy_pmf = run_info_sa(mdp, demo_policy_lambda, iters=500, beta=beta, convergence_threshold=0.00001, is_deterministic_ib=is_deterministic_ib)
 
     # Make demonstrator agent and random agent.
     demo_agent = FixedPolicyAgent(demo_policy_lambda, name="$\\pi_d$")
@@ -473,20 +477,26 @@ def info_sa_compare_policies(mdp, demo_policy_lambda, beta=3.0, deterministic_ib
     print "\tnum non zero states =", len(non_zero_abstr_states)
     print
 
-def info_sa_visualize_abstr(mdp, demo_policy, beta=2.0, deterministic_ib=False):
+def info_sa_visualize_abstr(mdp, demo_policy_lambda, beta=2.0, is_deterministic_ib=False, is_agent_in_control=False):
     '''
     Args:
         mdp (simple_rl.MDP)
-        demo_policy (lambda : simple_rl.State --> str)
+        demo_policy_lambda (lambda : simple_rl.State --> str)
         beta (float)
-        deterministic_ib (bool)
+        is_deterministic_ib (bool)
+        is_agent_in_control (bool)
 
     Summary:
         Visualizes the state abstraction found by info_sa using pygame.
     '''
-    # Run info_sa.
-    pmf_s_phi, phi_pmf, abstr_policy = run_info_sa(mdp, demo_policy, iters=500, beta=beta, convergence_threshold=0.00001, deterministic_ib=deterministic_ib)
-    lambda_abstr_policy = get_lambda_policy(abstr_policy)
+    if is_agent_in_control:
+        # Run info_sa with the agent controlling the MDP.
+        pmf_s_phi, phi_pmf, abstr_policy_pmf = agent_in_control.run_agent_in_control_info_sa(mdp, demo_policy_lambda, rounds=100, iters=500, beta=beta, is_deterministic_ib=is_deterministic_ib)
+    else:
+        # Run info_sa.
+        pmf_s_phi, phi_pmf, abstr_policy_pmf = run_info_sa(mdp, demo_policy_lambda, iters=500, beta=beta, convergence_threshold=0.00001, is_deterministic_ib=is_deterministic_ib)
+
+    lambda_abstr_policy = get_lambda_policy(abstr_policy_pmf)
     prob_s_phi = ProbStateAbstraction(phi_pmf)
     crisp_s_phi = convert_prob_sa_to_sa(prob_s_phi)
 
@@ -560,13 +570,13 @@ def info_sa_planning_experiment(min_grid_size=5, max_grid_size=11, beta=10.0):
         write_datum(os.path.join(file_prefix, "times", vanilla_file), vanilla_time)
         write_datum(os.path.join(file_prefix, "times", sa_file), sa_time)
 
-def learn_w_abstr(mdp, demo_policy, beta_list=[0.0, 2.0, 5.0, 50.0], deterministic_ib=False):
+def learn_w_abstr(mdp, demo_policy, beta_list=[0.0, 2.0, 5.0, 50.0], is_deterministic_ib=False):
     '''
     Args:
         mdp (simple_rl.MDP)
         demo_policy (lambda : simple_rl.State --> str)
         beta_list (list)
-        deterministic_ib (bool)
+        is_deterministic_ib (bool)
 
     Summary:
         Computes a state abstraction for the given beta and compares Q-Learning with and without the abstraction.
@@ -574,7 +584,7 @@ def learn_w_abstr(mdp, demo_policy, beta_list=[0.0, 2.0, 5.0, 50.0], determinist
     # Run info_sa.
     dict_of_phi_pmfs = {}
     for beta in beta_list:
-        pmf_s_phi, phi_pmf, abstr_policy_pmf = run_info_sa(mdp, demo_policy, iters=300, beta=beta, convergence_threshold=0.0001, deterministic_ib=deterministic_ib)
+        pmf_s_phi, phi_pmf, abstr_policy_pmf = run_info_sa(mdp, demo_policy, iters=300, beta=beta, convergence_threshold=0.0001, is_deterministic_ib=is_deterministic_ib)
 
         # Translate abstractions.
         prob_s_phi = ProbStateAbstraction(phi_pmf)
@@ -605,11 +615,13 @@ def main():
     mdp = FourRoomMDP(width=grid_dim, height=grid_dim, init_loc=(1, 1), slip_prob=0.05, goal_locs=[(grid_dim, grid_dim)], gamma=0.99)
 
     # Experiment Type.
-    exp_type = "learn_w_abstr"
+    exp_type = "plot_info_sa_val_and_num_states"
 
     # For comparing policies and visualizing.
-    beta = 50.0
-    deterministic_ib = True
+    beta = 2.0
+    is_deterministic_ib = True
+    is_agent_in_control = True
+    # init_beta = 0.0 if is_agent_in_control else 0.0
 
     # For main plotting experiment.
     beta_range = list(chart_utils.drange(0.0, 4.0, 0.2))
@@ -624,16 +636,16 @@ def main():
 
     if exp_type == "plot_info_sa_val_and_num_states":
         # Makes the main two plots.
-        make_info_sa_val_and_size_plots(mdp, demo_policy, beta_range, instances=instances)
+        make_info_sa_val_and_size_plots(mdp, demo_policy, beta_range, instances=instances, is_agent_in_control=is_agent_in_control)
     elif exp_type == "compare_policies":
         # Makes a plot comparing value of pi-phi combo from info_sa with \pi_d.
-        info_sa_compare_policies(mdp, demo_policy, beta=beta, deterministic_ib=deterministic_ib)
+        info_sa_compare_policies(mdp, demo_policy, beta=beta, is_deterministic_ib=is_deterministic_ib, is_agent_in_control=is_agent_in_control)
     elif exp_type == "visualize_info_sa_abstr":
         # Visualize the state abstraction found by info_sa.
-        info_sa_visualize_abstr(mdp, demo_policy, beta=beta, deterministic_ib=deterministic_ib)
+        info_sa_visualize_abstr(mdp, demo_policy, beta=beta, is_deterministic_ib=is_deterministic_ib, is_agent_in_control=is_agent_in_control)
     elif exp_type == "learn_w_abstr":
         # Run learning experiments for different settings of \beta.
-        learn_w_abstr(mdp, demo_policy, deterministic_ib=deterministic_ib)
+        learn_w_abstr(mdp, demo_policy, is_deterministic_ib=is_deterministic_ib)
     elif exp_type == "planning":
         info_sa_planning_experiment()
 

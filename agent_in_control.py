@@ -54,7 +54,7 @@ def get_stationary_rho_ground_states_from_abstr_policy(policy_pmf, mdp, ground_s
 
     return rho
 
-def run_agent_in_control_info_sa(mdp, demo_policy_lambda, rounds=100, iters=500, beta=20.0, round_convergence_thresh=0.1, iter_convergence_thresh=0.000001, deterministic_ib=False):
+def run_agent_in_control_info_sa(mdp, demo_policy_lambda, rounds=25, iters=500, beta=20.0, round_convergence_thresh=0.1, iter_convergence_thresh=0.000001, is_deterministic_ib=False):
     '''
     Args:
         mdp (simple_rl.MDP)
@@ -65,7 +65,7 @@ def run_agent_in_control_info_sa(mdp, demo_policy_lambda, rounds=100, iters=500,
         round_convergence_thresh (float): Determines when to stop rounds.
         iter_convergence_thresh (float): When all three distributions satisfy
             L1(p_{t+1}, p_t) < @convergence_threshold, we stop iterating.
-        deterministic_ib (bool): If true, run DIB, else IB.
+        is_deterministic_ib (bool): If true, run DIB, else IB.
         is_agent_in_control (bool): If True, the agent's actions dictate the source distribution on states. Otherwise,
             we assume the demonstrator policy controls the source distribution on states (which is then fixed).
 
@@ -91,7 +91,7 @@ def run_agent_in_control_info_sa(mdp, demo_policy_lambda, rounds=100, iters=500,
     demo_policy_pmf = info_sa.get_pmf_policy(demo_policy_lambda, ground_states, actions)
 
     # Init distributions.
-    phi_pmf, abstract_states = info_sa.init_random_phi(ground_states, deterministic=deterministic_ib)
+    phi_pmf, abstract_states = info_sa.init_random_phi(ground_states, deterministic=is_deterministic_ib)
     pmf_s_phi = init_random_rho_phi(abstract_states)
     abstr_policy_pmf = init_random_pi(abstract_states, actions)
 
@@ -108,13 +108,13 @@ def run_agent_in_control_info_sa(mdp, demo_policy_lambda, rounds=100, iters=500,
             print "\t\titer", i
 
             # (A) Compute \phi.
-            next_phi_pmf = info_sa.compute_phi_pmf(pmf_s, pmf_s_phi, demo_policy_pmf, abstr_policy_pmf, ground_states, abstract_states, beta=beta, deterministic=deterministic_ib)
+            next_phi_pmf = info_sa.compute_phi_pmf(pmf_s, pmf_s_phi, demo_policy_pmf, abstr_policy_pmf, ground_states, abstract_states, beta=beta, deterministic=is_deterministic_ib)
 
             # (B) Compute \rho(s).
             next_pmf_s_phi = info_sa.compute_prob_of_s_phi(pmf_s, next_phi_pmf, ground_states, abstract_states)
 
             # (C) Compute \pi_\phi.
-            next_abstr_policy_pmf = info_sa.compute_abstr_policy(demo_policy_pmf, ground_states, abstract_states, actions, next_phi_pmf, pmf_s, next_pmf_s_phi, deterministic=deterministic_ib)
+            next_abstr_policy_pmf = info_sa.compute_abstr_policy(demo_policy_pmf, ground_states, abstract_states, actions, next_phi_pmf, pmf_s, next_pmf_s_phi, deterministic=is_deterministic_ib)
 
             # Convergence checks.
             coding_update_delta = max([l1_distance(next_phi_pmf[s], phi_pmf[s]) for s in ground_states])
@@ -138,9 +138,9 @@ def run_agent_in_control_info_sa(mdp, demo_policy_lambda, rounds=100, iters=500,
         round_num += 1
         next_pmf_s = get_stationary_rho_ground_states_from_abstr_policy(abstr_policy_pmf, mdp, ground_states, phi_pmf)
 
-        print "\t\t", l1_distance(next_pmf_s, pmf_s)
+        print "\t\t rho gap:", round(l1_distance(next_pmf_s, pmf_s), 3)
         if l1_distance(next_pmf_s, pmf_s) < round_convergence_thresh:
-            print "Converged."
+            print "\t\tConverged."
             break
 
         pmf_s = next_pmf_s
@@ -205,7 +205,7 @@ def main():
     demo_policy = info_sa.get_lambda_policy(info_sa.make_det_policy_eps_greedy(vi.policy, vi.get_states(), mdp.get_actions(), epsilon=0.1))
 
     # Run.
-    run_agent_in_control_info_sa(mdp, demo_policy, beta=5.0, deterministic_ib=True)
+    run_agent_in_control_info_sa(mdp, demo_policy, beta=5.0, is_deterministic_ib=True)
 
 
 if __name__ == "__main__":

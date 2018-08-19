@@ -16,11 +16,11 @@ from simple_rl.run_experiments import evaluate_agent
 from simple_rl.utils import chart_utils
 from rlit_utils import write_datum_to_file, end_of_instance
 
-# ---------------------
-# -- info_sa Plotting --
-# ---------------------
+# -------------------
+# -- DIBS Plotting --
+# -------------------
 
-def make_info_sa_val_and_size_plots(mdp, demo_policy_lambda, beta_range, results_dir="info_sa_results", instances=3, include_stoch=False):
+def make_info_sa_val_and_size_plots(mdp, demo_policy_lambda, beta_range, results_dir="info_sa_results", instances=3, include_stoch=False, is_agent_in_control=False):
     '''
     Args:
         mdp (simple_rl.MDP)
@@ -29,6 +29,7 @@ def make_info_sa_val_and_size_plots(mdp, demo_policy_lambda, beta_range, results
         results_dir (str)
         instances (int)
         include_stoch (bool): If True, also runs IB.
+        is_agent_in_control (bool): If True, runs the agent_in_control.py variant of DIB-SA.
 
     Summary:
         Main plotting function for info_sa experiments.
@@ -42,7 +43,7 @@ def make_info_sa_val_and_size_plots(mdp, demo_policy_lambda, beta_range, results
             os.remove(os.path.join(results_dir, str(policy)) + ".csv")
 
     # Set relevant params.
-    param_dict = {"mdp":mdp, "iters":500, "convergence_threshold":0.0001, "demo_policy_lambda":demo_policy_lambda}
+    param_dict = {"mdp":mdp, "iters":500, "convergence_threshold":0.0001, "demo_policy_lambda":demo_policy_lambda, "is_agent_in_control": is_agent_in_control}
 
     # Record vallue of demo policy and size of ground state space.
     demo_agent = FixedPolicyAgent(demo_policy_lambda)
@@ -62,12 +63,12 @@ def make_info_sa_val_and_size_plots(mdp, demo_policy_lambda, beta_range, results
         for beta in beta_range:
 
             # Run DIB.
-            dib_val, dib_states = _info_sa_val_and_size_plot_wrapper(beta=beta, param_dict=dict(param_dict.items() + {"deterministic_ib":True,"use_crisp_policy":False}.items()))
+            dib_val, dib_states = _info_sa_val_and_size_plot_wrapper(beta=beta, param_dict=dict(param_dict.items() + {"is_deterministic_ib":True,"use_crisp_policy":False}.items()))
             write_datum_to_file(file_name="dib_val", datum=dib_val, extra_dir=results_dir)
             write_datum_to_file(file_name="dib_states", datum=dib_states, extra_dir=results_dir)
 
             if include_stoch:
-                ib_val, ib_states = _info_sa_val_and_size_plot_wrapper(beta=beta, param_dict=dict(param_dict.items() + {"deterministic_ib":False,"use_crisp_policy":False}.items()))
+                ib_val, ib_states = _info_sa_val_and_size_plot_wrapper(beta=beta, param_dict=dict(param_dict.items() + {"is_deterministic_ib":False,"use_crisp_policy":False}.items()))
                 write_datum_to_file(file_name="ib_val", datum=ib_val, extra_dir=results_dir)
                 write_datum_to_file(file_name="ib_states", datum=ib_states, extra_dir=results_dir)
 
@@ -80,7 +81,9 @@ def make_info_sa_val_and_size_plots(mdp, demo_policy_lambda, beta_range, results
 
 
     # Set title and axes.
-    chart_utils.CUSTOM_TITLE = "info sa: $\\beta$ vs. Value"
+    chart_utils.CUSTOM_TITLE = "DIBS: $\\beta$ vs. Value"
+    if is_agent_in_control:
+        chart_utils.CUSTOM_TITLE = "AC-" + chart_utils.CUSTOM_TITLE
     chart_utils.X_AXIS_LABEL = "$\\beta$"
     chart_utils.Y_AXIS_LABEL = "$V^{\\pi_\\phi}$"
     chart_utils.X_AXIS_START_VAL = beta_range[0]
@@ -121,140 +124,67 @@ def _info_sa_val_and_size_plot_wrapper(beta, param_dict):
     demo_policy_lambda = param_dict["demo_policy_lambda"]
     iters = param_dict["iters"]
     convergence_threshold = param_dict["convergence_threshold"]
-    deterministic_ib = param_dict["deterministic_ib"]
+    is_deterministic_ib = param_dict["is_deterministic_ib"]
     use_crisp_policy = param_dict["use_crisp_policy"]
+    is_agent_in_control = param_dict["is_agent_in_control"]
 
-    from info_sa import run_info_sa
-    pmf_code, coding_distr, abstr_policy = run_info_sa(mdp, demo_policy_lambda, beta=beta, iters=iters, convergence_threshold=convergence_threshold, deterministic_ib=deterministic_ib)
+    # --- Run DIBS to convergence ---
+    if is_agent_in_control:
+        # Run info_sa with the agent controlling the MDP.
+        import agent_in_control
+        pmf_s_phi, phi_pmf, abstr_policy_pmf = agent_in_control.run_agent_in_control_info_sa(mdp, demo_policy_lambda, beta=beta, is_deterministic_ib=is_deterministic_ib)
+    else:
+        # Run info_sa.
+        from info_sa import run_info_sa
+        pmf_s_phi, phi_pmf, abstr_policy_pmf = run_info_sa(mdp, demo_policy_lambda, iters=500, beta=beta, convergence_threshold=0.00001, is_deterministic_ib=is_deterministic_ib)
 
+    print "\tEvaluating..."
     # Make abstract agent.
     from info_sa import get_lambda_policy
     
     # Make the policy deterministic if needed.
     if use_crisp_policy:
         from info_sa import make_policy_det_max_policy
-        policy = get_lambda_policy(make_policy_det_max_policy(abstr_policy))
+        policy = get_lambda_policy(make_policy_det_max_policy(abstr_policy_pmf))
     else:
-        policy = get_lambda_policy(abstr_policy)
+        policy = get_lambda_policy(abstr_policy_pmf)
 
-    prob_s_phi = ProbStateAbstraction(coding_distr)
+    prob_s_phi = ProbStateAbstraction(phi_pmf)
 
     # -- Compute Values --
 
-    phi = convert_prob_sa_to_sa(prob_s_phi) if deterministic_ib else prob_s_phi
+    phi = convert_prob_sa_to_sa(prob_s_phi) if is_deterministic_ib else prob_s_phi
     abstr_agent = AbstractionWrapper(FixedPolicyAgent, state_abstr=phi, agent_params={"policy":policy, "name":"$\\pi_\\phi$"}, name_ext="")
     
     # Compute value of abstract policy w/ coding distribution.
     value = evaluate_agent(agent=abstr_agent, mdp=mdp, instances=1000)
 
     # -- Compute size of S_\phi --
-    if deterministic_ib:
+    if is_deterministic_ib:
         s_phi_size = phi.get_num_abstr_states()
     else:
         # TODO: could change this to {s in S : Pr(s) > 0}.
         from rlit_utils import entropy
-        s_phi_size = entropy(pmf_code)
+        s_phi_size = entropy(pmf_s_phi)
 
     return value, s_phi_size
-
-
-def _info_sa_val_plot_wrapper(x, param_dict):
-    '''
-    Args:
-        x (float): stands for $\beta$ in the info_sa algorithm.
-        param_dict (dict): contains relevant parameters for plotting.
-
-    Returns:
-        (int): The value achieved by \pi_\phi^* in the MDP.
-
-    Notes:
-        This serves as a wrapper to cooperate with PlotFunc.
-    '''
-    mdp = param_dict["mdp"]
-    demo_policy_lambda = param_dict["demo_policy_lambda"]
-    iters = param_dict["iters"]
-    convergence_threshold = param_dict["convergence_threshold"]
-    deterministic_ib = param_dict["deterministic_ib"]
-    use_crisp_policy = param_dict["use_crisp_policy"]
-
-    from info_sa import run_info_sa
-    pmf_code, coding_distr, abstr_policy = run_info_sa(mdp, demo_policy_lambda, beta=x, iters=iters, convergence_threshold=convergence_threshold, deterministic_ib=deterministic_ib)
-
-    # Make abstract agent.
-    from info_sa import get_lambda_policy
-    
-    # Make the policy deterministic if needed.
-    if use_crisp_policy:
-        from info_sa import make_policy_det_max_policy
-        policy = get_lambda_policy(make_policy_det_max_policy(abstr_policy))
-    else:
-        policy = get_lambda_policy(abstr_policy)
-
-    prob_s_phi = ProbStateAbstraction(coding_distr)
-
-    # Convert to crisp SA if needed.
-    phi = convert_prob_sa_to_sa(prob_s_phi) if deterministic_ib else prob_s_phi
-
-    abstr_agent = AbstractionWrapper(FixedPolicyAgent, state_abstr=phi, agent_params={"policy":policy, "name":"$\\pi_\\phi$"}, name_ext="")
-    
-    # Compute value of abstract policy w/ coding distribution.
-    value = evaluate_agent(agent=abstr_agent, mdp=mdp, instances=1000)
-
-    return value
-
-
-def _info_sa_s_phi_size_plot_wrapper(x, param_dict):
-    '''
-    Args:
-        x (float): stands for $beta$ in the info_sa algorithm.
-        param_dict (dict): contains relevant parameters for plotting.
-
-    Returns:
-        (int): The size of the computed abstract state space.
-
-    Notes:
-        This serves as a wrapper to cooperate with PlotFunc.
-    '''
-
-    # Grab parameters.
-    mdp = param_dict["mdp"]
-    demo_policy_lambda = param_dict["demo_policy_lambda"]
-    iters = param_dict["iters"]
-    convergence_threshold = param_dict["convergence_threshold"]
-    deterministic_ib = param_dict["deterministic_ib"]
-
-    # Let info_sa run.
-    from info_sa import run_info_sa
-    pmf_code, coding_distr, abstr_policy = run_info_sa(mdp, demo_policy_lambda, beta=x, iters=iters, convergence_threshold=convergence_threshold, deterministic_ib=deterministic_ib)
-
-    # Check size.
-    prob_s_phi = ProbStateAbstraction(coding_distr)
-    if deterministic_ib:
-        phi = convert_prob_sa_to_sa(prob_s_phi)
-        s_phi_size = phi.get_num_abstr_states()
-    else:
-        from rlit_utils import entropy
-        # TODO: could change this to {s in S : Pr(s) > 0}.
-        s_phi_size = entropy(pmf_code)
-
-    return s_phi_size
 
 
 # -------------------------
 # -- Plot States vs. Val --
 # -------------------------
 
-def plot_state_size_vs_advantage(directory="info_sa_results", deterministic_ib=True, advantage=False):
+def plot_state_size_vs_advantage(directory="info_sa_results", is_deterministic_ib=True, advantage=False):
     '''
     Args:
         directory (str)
-        determinstic_ib (bool)
+        is_deterministic_ib (bool)
         advantage (bool)
 
     Summary:
         Takes the current state/
     '''
-    method_name = "DIB" if deterministic_ib else "IB"
+    method_name = "DIB" if is_deterministic_ib else "IB"
     val_file_name = method_name.lower() + "_val"
     state_file_name = method_name.lower() + "_states"
 

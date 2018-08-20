@@ -222,7 +222,7 @@ def plot_state_size_vs_advantage(directory="info_sa_results", is_deterministic_i
         ax.invert_xaxis()
 
     # Make plot.
-    pyplot.plot(x_axis, y_axis,  marker='.') #, color=chart_utils.first_five[0])
+    pyplot.plot(x_axis, y_axis,  marker='.')
     pyplot.xlabel(x_axis_name)
     pyplot.ylabel("$|S_\\phi|$")
     pyplot.title(method_name + ": Rate-Distortion Curve")

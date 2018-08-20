@@ -500,8 +500,13 @@ def info_sa_visualize_abstr(mdp, demo_policy_lambda, beta=2.0, is_deterministic_
     prob_s_phi = ProbStateAbstraction(phi_pmf)
     crisp_s_phi = convert_prob_sa_to_sa(prob_s_phi)
 
+    vi = ValueIteration(mdp)
+    print "\t|S|", vi.get_num_states()
+    print "\t|S_\\phi|_crisp =", crisp_s_phi.get_num_abstr_states()
+
     from simple_rl.abstraction.state_abs.sa_helpers import visualize_state_abstr_grid
     visualize_state_abstr_grid(mdp, crisp_s_phi)
+
 
 def info_sa_planning_experiment(min_grid_size=5, max_grid_size=11, beta=10.0):
     '''
@@ -618,14 +623,13 @@ def main():
     exp_type = "plot_info_sa_val_and_num_states"
 
     # For comparing policies and visualizing.
-    beta = 2.0
+    beta = 100.0
     is_deterministic_ib = True
     is_agent_in_control = True
-    # init_beta = 0.0 if is_agent_in_control else 0.0
 
     # For main plotting experiment.
     beta_range = list(chart_utils.drange(0.0, 4.0, 0.2))
-    instances = 5
+    instances = 10
 
     # Get demo policy.
     vi = ValueIteration(mdp)

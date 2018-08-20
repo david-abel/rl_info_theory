@@ -54,7 +54,7 @@ def get_stationary_rho_ground_states_from_abstr_policy(policy_pmf, mdp, ground_s
 
     return rho
 
-def run_agent_in_control_info_sa(mdp, demo_policy_lambda, rounds=25, iters=500, beta=20.0, round_convergence_thresh=0.1, iter_convergence_thresh=0.000001, is_deterministic_ib=False):
+def run_agent_in_control_info_sa(mdp, demo_policy_lambda, rounds=10, iters=500, beta=20.0, round_convergence_thresh=0.1, iter_convergence_thresh=0.000001, is_deterministic_ib=False):
     '''
     Args:
         mdp (simple_rl.MDP)
@@ -132,7 +132,6 @@ def run_agent_in_control_info_sa(mdp, demo_policy_lambda, rounds=25, iters=500, 
             abstr_policy_pmf = next_abstr_policy_pmf
 
             if is_coding_converged and is_policy_converged and is_pmf_s_phi_converged:
-                # print "\tinfo_sa Converged."
                 break
 
         round_num += 1
@@ -144,7 +143,6 @@ def run_agent_in_control_info_sa(mdp, demo_policy_lambda, rounds=25, iters=500, 
             break
 
         pmf_s = next_pmf_s
-
 
     return pmf_s_phi, phi_pmf, abstr_policy_pmf
 
@@ -207,12 +205,5 @@ def main():
     # Run.
     run_agent_in_control_info_sa(mdp, demo_policy, beta=5.0, is_deterministic_ib=True)
 
-
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
